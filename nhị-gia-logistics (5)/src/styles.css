@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Màu sắc đơn hàng theo mức độ ưu tiên */
+.job-card-Red {
+    border-left: 10px solid #ff4d4f;
+    background-color: #fff1f0;
+}
+
+/* Ưu tiên */
+.job-card-Yellow {
+    border-left: 10px solid #ffc53d;
+    background-color: #fffbe6;
+}
+
+/* Gấp */
+.job-card-Blue {
+    border-left: 10px solid #40a9ff;
+    background-color: #e6f7ff;
+}
+
+/* Cần thực hiện */
+.job-card-White {
+    border-left: 10px solid #d9d9d9;
+    background-color: #ffffff;
+}
+
+/* Bình thường */

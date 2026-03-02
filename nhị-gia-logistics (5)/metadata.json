@@ -1,0 +1,9 @@
+{
+  "name": "Nhị Gia Logistics",
+  "description": "Hệ thống quản lý đơn hàng giao nhận nội bộ cho Nhị Gia, bao gồm phân quyền Admin, Quản lý và Nhân viên giao nhận.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

@@ -1,0 +1,65 @@
+@if (!isLoggedIn()) {
+<app-login></app-login>
+} @else {
+<app-layout (logout)="onLogout()" (navigate)="setView($event)">
+
+  <div class="max-w-7xl mx-auto h-full flex flex-col">
+
+    @if (currentView() === 'DASHBOARD') {
+    <app-dashboard (create)="openCreateForm()"></app-dashboard>
+    }
+
+    @if (currentView() === 'ORDERS') {
+    <!-- Toolbar -->
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold text-gray-800">DANH SÁCH CÔNG VIỆC (JOB LIST)</h2>
+
+      @if (currentUser()?.role === 'NVADMIN' || currentUser()?.role === 'IT') {
+      <button (click)="openCreateForm()"
+        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center shadow transition">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+        </svg>
+        <span>Tạo Yêu Cầu Mới</span>
+      </button>
+      }
+    </div>
+
+    <!-- Main List -->
+    <div class="flex-1 overflow-y-auto relative">
+      <app-order-list (create)="openCreateForm()" (select)="selectOrder($event)"></app-order-list>
+    </div>
+    }
+
+    @if (currentView() === 'LOGS') {
+    <app-activity-log></app-activity-log>
+    }
+
+    @if (currentView() === 'USER_MANAGEMENT') {
+    <app-user-management></app-user-management>
+    }
+
+    @if (currentView() === 'GUIDE') {
+    <app-guide></app-guide>
+    }
+
+  </div>
+
+  <!-- Modals -->
+  @if (selectedOrder()) {
+  <app-order-detail [order]="selectedOrder()!" (close)="closeDetail()" (edit)="startEdit($event)">
+  </app-order-detail>
+  }
+
+  @if (showCreateForm()) {
+  <div class="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl">
+      <app-order-form [orderData]="editingOrder()" (cancel)="closeForm()" (save)="saveOrder($event)">
+      </app-order-form>
+    </div>
+  </div>
+  }
+
+</app-layout>
+}
