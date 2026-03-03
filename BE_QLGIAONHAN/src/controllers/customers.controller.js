@@ -2,7 +2,7 @@ const pool = require("../config/database");
 
 exports.getCustomers = async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM customers ORDER BY id DESC");
+    const [rows] = await pool.query("SELECT * FROM nhigia_logistics_customers nhigia_logistics_order BY id DESC");
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -14,7 +14,7 @@ exports.getCustomerByPhone = async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      "SELECT * FROM customers WHERE phone=?",
+      "SELECT * FROM nhigia_logistics_customers WHERE phone=?",
       [phone]
     );
 
@@ -33,7 +33,7 @@ exports.getCustomerByCompany = async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      "SELECT * FROM customers WHERE company=?",
+      "SELECT * FROM nhigia_logistics_customers WHERE company=?",
       [company]
     );
 
@@ -52,7 +52,7 @@ exports.createCustomer = async (req, res) => {
   const { phone, company, address, contact } = req.body;
 
   try {
-    await pool.query("INSERT INTO customers SET ?", {
+    await pool.query("INSERT INTO nhigia_logistics_customers SET ?", {
       phone,
       company,
       address,
@@ -71,7 +71,7 @@ exports.updateCustomer = async (req, res) => {
   const updates = req.body;
 
   try {
-    await pool.query("UPDATE customers SET ? WHERE id=?", [updates, id]);
+    await pool.query("UPDATE nhigia_logistics_customers SET ? WHERE id=?", [updates, id]);
     res.json({ message: "Customer updated" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -83,7 +83,7 @@ exports.deleteCustomer = async (req, res) => {
   const { id } = req.params;
 
   try {
-    await pool.query("DELETE FROM customers WHERE id=?", [id]);
+    await pool.query("DELETE FROM nhigia_logistics_customers WHERE id=?", [id]);
     res.json({ message: "Customer deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });

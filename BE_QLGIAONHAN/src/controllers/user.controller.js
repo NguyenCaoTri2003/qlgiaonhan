@@ -4,7 +4,7 @@ exports.getUsers = async (req, res) => {
   const { role } = req.query;
 
   try {
-    let query = "SELECT id, email, name, role, avatar FROM users";
+    let query = "SELECT id, email, name, role, avatar FROM nhigia_logistics_users";
     let params = [];
 
     if (role) {

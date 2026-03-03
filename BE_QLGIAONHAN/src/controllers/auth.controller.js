@@ -1,5 +1,6 @@
 const pool = require("../config/database");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 require("dotenv").config();
 
 exports.login = async (req, res) => {
@@ -7,10 +8,8 @@ exports.login = async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      `SELECT id, email, name, role, avatar 
-       FROM users 
-       WHERE email = ? AND password = ?`,
-      [email, password]
+      `SELECT * FROM nhigia_logistics_users WHERE email = ?`,
+      [email]
     );
 
     if (rows.length === 0) {
@@ -18,6 +17,12 @@ exports.login = async (req, res) => {
     }
 
     const user = rows[0];
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(401).json({ message: "Sai email hoặc mật khẩu" });
+    }
 
     const token = jwt.sign(
       {
@@ -29,11 +34,14 @@ exports.login = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES }
     );
 
+    delete user.password;
+
     res.json({
       message: "Login thành công",
       user,
       token,
     });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

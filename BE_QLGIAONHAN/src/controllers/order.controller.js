@@ -1,11 +1,41 @@
 const pool = require("../config/database");
 const generateOrderId = require("../utils/orderId");
 
+// exports.getAllOrders = async (req, res) => {
+//   console.log("USER:", req.user);
+//   const [rows] = await pool.query(
+//     "SELECT * FROM nhigia_logistics_orders ORDER BY sort_index ASC",
+//   );
+//   res.json(rows);
+//   console.log("Fetched nhigia_logistics_orders:", rows);
+// };
+
 exports.getAllOrders = async (req, res) => {
-  const [rows] = await pool.query(
-    "SELECT * FROM orders ORDER BY sort_index ASC",
-  );
-  res.json(rows);
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    const [rows] = await pool.query(
+      `SELECT * FROM nhigia_logistics_orders 
+       ORDER BY sort_index ASC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+    const [countResult] = await pool.query(
+      `SELECT COUNT(*) as total FROM nhigia_logistics_orders`
+    );
+
+    res.json({
+      data: rows,
+      total: countResult[0].total,
+      page,
+      totalPages: Math.ceil(countResult[0].total / limit),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
 
 exports.createOrder = async (req, res) => {
@@ -15,7 +45,7 @@ exports.createOrder = async (req, res) => {
 
   const now = Date.now();
 
-  await pool.query(`INSERT INTO orders SET ?`, {
+  await pool.query(`INSERT INTO nhigia_logistics_orders SET ?`, {
     ...req.body,
     id,
     createDate: now,
@@ -25,7 +55,7 @@ exports.createOrder = async (req, res) => {
     statusUpdateDate: now,
   });
 
-  await pool.query("INSERT INTO logs SET ?", {
+  await pool.query("INSERT INTO nhigia_logistics_logs SET ?", {
     timestamp: now,
     userEmail: user.email,
     userName: user.name,
@@ -34,7 +64,7 @@ exports.createOrder = async (req, res) => {
     details: `Đơn hàng được tạo cho ${req.body.company}`,
   });
 
-  await pool.query("INSERT INTO notifications SET ?", {
+  await pool.query("INSERT INTO nhigia_logistics_notifications SET ?", {
     id: Math.random().toString(36).substr(2, 9),
     timestamp: now,
     message: `Đơn hàng mới ${id} cần điều phối`,
@@ -52,13 +82,13 @@ exports.rejectOrder = async (req, res) => {
 
   try {
     await pool.query(
-      `UPDATE orders 
+      `UPDATE nhigia_logistics_orders 
        SET status=?, statusUpdateDate=?, rejectionReason=? 
        WHERE id=?`,
       ["Từ chối", now, reason, orderId],
     );
 
-    await pool.query("INSERT INTO logs SET ?", {
+    await pool.query("INSERT INTO nhigia_logistics_logs SET ?", {
       timestamp: now,
       action: "Từ chối",
       orderId,
@@ -76,7 +106,7 @@ exports.updateOrder = async (req, res) => {
   const updates = req.body;
 
   try {
-    await pool.query(`UPDATE orders SET ? WHERE id=?`, [updates, orderId]);
+    await pool.query(`UPDATE nhigia_logistics_orders SET ? WHERE id=?`, [updates, orderId]);
 
     res.json({ message: "Updated" });
   } catch (err) {
@@ -90,7 +120,7 @@ exports.updateOrderSort = async (req, res) => {
   try {
     for (let i = 0; i < orderIds.length; i++) {
       await pool.query(
-        `UPDATE orders SET sort_index=? WHERE id=? AND user_id=?`,
+        `UPDATE nhigia_logistics_orders SET sort_index=? WHERE id=? AND user_id=?`,
         [i, orderIds[i], userId],
       );
     }
@@ -107,13 +137,13 @@ exports.completeOrder = async (req, res) => {
 
   try {
     await pool.query(
-      `UPDATE orders 
+      `UPDATE nhigia_logistics_orders 
        SET status=?, statusUpdateDate=? 
        WHERE id=?`,
       ["Hoàn thành", now, orderId],
     );
 
-    await pool.query("INSERT INTO logs SET ?", {
+    await pool.query("INSERT INTO nhigia_logistics_logs SET ?", {
       timestamp: now,
       action: "Hoàn thành",
       orderId,
@@ -134,13 +164,13 @@ exports.adminFinalize = async (req, res) => {
   try {
     if (approved) {
       await pool.query(
-        `UPDATE orders 
+        `UPDATE nhigia_logistics_orders 
          SET status=?, statusUpdateDate=? 
          WHERE id=?`,
         ["Đã xác nhận hoàn tất", now, orderId],
       );
 
-      await pool.query("INSERT INTO logs SET ?", {
+      await pool.query("INSERT INTO nhigia_logistics_logs SET ?", {
         timestamp: now,
         action: "Admin xác nhận",
         orderId,
@@ -148,7 +178,7 @@ exports.adminFinalize = async (req, res) => {
       });
     } else {
       await pool.query(
-        `UPDATE orders 
+        `UPDATE nhigia_logistics_orders 
          SET status=?, 
              statusUpdateDate=?, 
              reviewNote=?, 
@@ -157,7 +187,7 @@ exports.adminFinalize = async (req, res) => {
         ["Chưa hoàn thành", now, reason, reason, orderId],
       );
 
-      await pool.query("INSERT INTO logs SET ?", {
+      await pool.query("INSERT INTO nhigia_logistics_logs SET ?", {
         timestamp: now,
         action: "Admin từ chối",
         orderId,
@@ -175,9 +205,9 @@ exports.deleteOrder = async (req, res) => {
   const orderId = req.params.id;
 
   try {
-    await pool.query(`DELETE FROM orders WHERE id=?`, [orderId]);
+    await pool.query(`DELETE FROM nhigia_logistics_orders WHERE id=?`, [orderId]);
 
-    await pool.query("INSERT INTO logs SET ?", {
+    await pool.query("INSERT INTO nhigia_logistics_logs SET ?", {
       timestamp: Date.now(),
       action: "Xóa đơn",
       orderId,
@@ -195,13 +225,13 @@ exports.assignReceiver = async (req, res) => {
   const orderId = req.params.id;
 
   await pool.query(
-    `UPDATE orders 
+    `UPDATE nhigia_logistics_orders 
      SET receiver=?, receiverName=?, status=?, statusUpdateDate=? 
      WHERE id=?`,
     [receiverEmail, receiverName, "Đã điều phối", Date.now(), orderId],
   );
 
-  await pool.query("INSERT INTO notifications SET ?", {
+  await pool.query("INSERT INTO nhigia_logistics_notifications SET ?", {
     id: Math.random().toString(36).substr(2, 9),
     timestamp: Date.now(),
     message: `Bạn được giao đơn hàng mới: ${orderId}`,
@@ -217,7 +247,7 @@ exports.shipperAccept = async (req, res) => {
   const { missingDocs } = req.body;
 
   await pool.query(
-    `UPDATE orders 
+    `UPDATE nhigia_logistics_orders 
      SET status=?, statusUpdateDate=?, missingDocs=? 
      WHERE id=?`,
     ["Đang xử lý", Date.now(), missingDocs || null, req.params.id],
@@ -233,7 +263,7 @@ exports.shipperReject = async (req, res) => {
 
   try {
     await pool.query(
-      `UPDATE orders 
+      `UPDATE nhigia_logistics_orders 
        SET status=?, statusUpdateDate=?, rejectionReason=? 
        WHERE id=?`,
       ["Từ chối nhận", now, reason, orderId],
@@ -252,7 +282,7 @@ exports.shipperComplete = async (req, res) => {
 
   try {
     await pool.query(
-      `UPDATE orders 
+      `UPDATE nhigia_logistics_orders 
        SET status=?, 
            statusUpdateDate=?, 
            completionImages=?, 
@@ -272,7 +302,7 @@ exports.shipperComplete = async (req, res) => {
     );
 
     // Log
-    await pool.query("INSERT INTO logs SET ?", {
+    await pool.query("INSERT INTO nhigia_logistics_logs SET ?", {
       timestamp: now,
       action: "Xử lý xong",
       orderId,
@@ -280,7 +310,7 @@ exports.shipperComplete = async (req, res) => {
     });
 
     // Notification
-    await pool.query("INSERT INTO notifications SET ?", {
+    await pool.query("INSERT INTO nhigia_logistics_notifications SET ?", {
       timestamp: now,
       message: `Đơn ${orderId} đã xử lý xong`,
       targetRole: "NVADMIN",
@@ -300,7 +330,7 @@ exports.qlRequestSupplement = async (req, res) => {
 
   try {
     await pool.query(
-      `UPDATE orders 
+      `UPDATE nhigia_logistics_orders 
        SET status=?, statusUpdateDate=?, supplementNote=?, supplementRequesterName=?, supplementDate=?, receiver=NULL, receiverName=NULL
        WHERE id=?`,
       ["Bổ sung", now, note, requesterName || "QL", now, orderId],
@@ -319,7 +349,7 @@ exports.resolveRequest = async (req, res) => {
 
   try {
     await pool.query(
-      `UPDATE orders 
+      `UPDATE nhigia_logistics_orders 
        SET status=?, statusUpdateDate=?, adminResponse=? 
        WHERE id=?`,
       ["Chờ tiếp nhận", now, note, orderId],
@@ -339,7 +369,7 @@ exports.shipperReturnSupplement = async (req, res) => {
   try {
     // Update order
     await pool.query(
-      `UPDATE orders
+      `UPDATE nhigia_logistics_orders
        SET status = ?,
            statusUpdateDate = ?,
            supplementNote = ?,
@@ -361,7 +391,7 @@ exports.shipperReturnSupplement = async (req, res) => {
     );
 
     // Log
-    await pool.query("INSERT INTO logs SET ?", {
+    await pool.query("INSERT INTO nhigia_logistics_logs SET ?", {
       timestamp: now,
       action: "NVGN yêu cầu bổ sung",
       orderId,
@@ -369,7 +399,7 @@ exports.shipperReturnSupplement = async (req, res) => {
     });
 
     // Notification (gửi cho QL)
-    await pool.query("INSERT INTO notifications SET ?", {
+    await pool.query("INSERT INTO nhigia_logistics_notifications SET ?", {
       timestamp: now,
       message: `NVGN yêu cầu bổ sung cho ${orderId}`,
       targetRole: "QL",

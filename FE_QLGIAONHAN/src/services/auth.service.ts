@@ -51,6 +51,7 @@ export class AuthService {
 
     localStorage.removeItem("nhigia_user");
     localStorage.removeItem("nhigia_token");
+    
   }
 
   private _users = signal<User[]>([]);

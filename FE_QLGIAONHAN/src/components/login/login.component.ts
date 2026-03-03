@@ -2,6 +2,7 @@ import { Component, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { AuthService } from "../../services/auth.service";
+import { OrderService } from "../../services/order.service";
 
 @Component({
   selector: "app-login",
@@ -102,20 +103,7 @@ export class LoginComponent {
   errorMsg = signal("");
 
   private authService = inject(AuthService);
-
-  // onLogin() {
-  //   if (!this.email || !this.password) {
-  //     this.errorMsg.set('Vui lòng nhập đầy đủ thông tin');
-  //     return;
-  //   }
-
-  //   const success = this.authService.login(this.email, this.password);
-  //   if (!success) {
-  //     this.errorMsg.set('Sai thông tin đăng nhập');
-  //   } else {
-  //     this.errorMsg.set('');
-  //   }
-  // }
+  private orderService = inject(OrderService);
 
   onLogin() {
     if (!this.email || !this.password) {
@@ -126,6 +114,7 @@ export class LoginComponent {
     this.authService.login(this.email, this.password).subscribe({
       next: (res: any) => {
         this.authService.setUser(res.user, res.token);
+        this.orderService.loadOrders();
         this.errorMsg.set("");
       },
       error: () => {
