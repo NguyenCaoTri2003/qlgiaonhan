@@ -1,0 +1,783 @@
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  input,
+  output,
+  signal,
+} from "@angular/core";
+import { CommonModule } from "@angular/common";
+import {
+  FormBuilder,
+  FormGroup,
+  ReactiveFormsModule,
+  Validators,
+  FormsModule,
+} from "@angular/forms";
+import { Attachment, DEPARTMENTS, Order, SENDERS } from "../../type/models";
+import { CustomerService } from "../../services/customer.service";
+
+@Component({
+  selector: "app-order-form",
+  standalone: true,
+  imports: [CommonModule, ReactiveFormsModule, FormsModule],
+  template: `
+    <div class="bg-white rounded-lg shadow-lg p-6 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-6 border-b pb-4">
+        <h2 class="text-xl font-bold text-gray-800 uppercase">
+          {{ isEditMode() ? "Chỉnh Sửa Yêu Cầu" : "Tạo Yêu Cầu Mới" }}
+        </h2>
+        <button
+          (click)="cancel.emit()"
+          class="text-gray-500 hover:text-gray-700"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      </div>
+
+      @if (form) {
+        <form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-4">
+          <!-- Warning Notes -->
+          @if (orderData()?.requestNote) {
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg
+                    class="h-5 w-5 text-yellow-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-yellow-700">
+                    <strong>Yêu cầu bổ sung:</strong>
+                    {{ orderData()?.requestNote }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- SECTION 1: SENDER & DEPARTMENT (NEW) -->
+          <div
+            class="bg-blue-50 p-4 rounded border border-blue-100 grid grid-cols-1 md:grid-cols-2 gap-4"
+          >
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1"
+                >Bộ Phận</label
+              >
+              <select
+                formControlName="department"
+                class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
+              >
+                @for (dept of departments; track dept) {
+                  <option [value]="dept">{{ dept }}</option>
+                }
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1"
+                >Người Giao</label
+              >
+              <div class="flex flex-col">
+                <select
+                  formControlName="senderName"
+                  (change)="onSenderChange()"
+                  class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
+                >
+                  <option value="">-- Chọn Người Giao --</option>
+                  @for (sender of senders; track sender.name) {
+                    <option [value]="sender.name">{{ sender.name }}</option>
+                  }
+                </select>
+                @if (selectedSenderPhone()) {
+                  <a
+                    [href]="'tel:' + selectedSenderPhone()"
+                    class="text-xs text-blue-600 mt-1 font-medium flex items-center hover:underline"
+                  >
+                    📞 {{ selectedSenderPhone() }} (Bấm gọi ngay)
+                  </a>
+                }
+              </div>
+            </div>
+          </div>
+
+          <hr class="border-gray-200" />
+
+          <!-- SECTION 2: CUSTOMER INFO -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Phone & Auto-fill -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Số điện thoại khách</label
+              >
+              <div class="relative">
+                <input
+                  type="text"
+                  formControlName="phone"
+                  (blur)="onPhoneBlur()"
+                  class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Nhập SĐT để tự động điền"
+                />
+                @if (isAutofilled()) {
+                  <span class="absolute right-2 top-2 text-green-500">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fill-rule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </span>
+                }
+              </div>
+            </div>
+
+            <!-- Company -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Tên công ty / Khách hàng</label
+              >
+              <select
+                formControlName="company"
+                (change)="onCompanyChange()"
+                class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 bg-white"
+              >
+                <option value="">-- Chọn công ty --</option>
+                @for (cust of customers(); track cust.company) {
+                  <option [value]="cust.company">{{ cust.company }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          <!-- Address & Contact -->
+          <div class="bg-gray-50 p-4 rounded border border-gray-100 space-y-4">
+            <h4
+              class="text-xs font-bold text-gray-400 uppercase tracking-widest"
+            >
+              Địa chỉ chi tiết
+            </h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Số địa chỉ (Tên đường, số nhà)</label
+                >
+                <input
+                  type="text"
+                  formControlName="addressLine"
+                  placeholder="Vd: 186-188 Nguyễn Duy"
+                  class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Tỉnh/TP</label
+                >
+                <select
+                  formControlName="province"
+                  (change)="onProvinceChange($event)"
+                  class="w-full border rounded-md py-2 px-3 bg-white"
+                >
+                  <option value="">-- Chọn Tỉnh/TP --</option>
+                  <option *ngFor="let p of provinces" [value]="p">
+                    {{ p }}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Quận/Huyện</label
+                >
+                <select
+                  formControlName="district"
+                  (change)="onDistrictChange($event)"
+                  class="w-full border rounded-md py-2 px-3 bg-white"
+                >
+                  <option value="">-- Chọn Quận/Huyện --</option>
+                  <option
+                    *ngFor="
+                      let d of districts[form.get('province')?.value] || []
+                    "
+                    [value]="d"
+                  >
+                    {{ d }}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Phường/Xã</label
+                >
+                <input
+                  type="text"
+                  formControlName="ward"
+                  placeholder="Vd: Phường 9"
+                  class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+            <div
+              class="text-[10px] text-gray-500 italic bg-white p-2 border rounded"
+            >
+              Link Google Maps sẽ được tạo: <b>{{ combinedAddress() }}</b>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Người liên hệ (Gặp)</label
+              >
+              <input
+                type="text"
+                formControlName="contact"
+                class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <!-- Time & Date -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Thời gian</label
+              >
+              <input
+                type="time"
+                formControlName="time"
+                class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Ngày</label
+              >
+              <input
+                type="date"
+                formControlName="date"
+                class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <!-- Purpose & Notes -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Mục đích</label
+            >
+            <input
+              type="text"
+              formControlName="purpose"
+              class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Vd: Giao hồ sơ, Lấy dấu..."
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Ghi chú</label
+            >
+            <textarea
+              formControlName="notes"
+              rows="2"
+              class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+            ></textarea>
+          </div>
+
+          <!-- Amounts -->
+          <div
+            class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded"
+          >
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Số tiền (VNĐ)</label
+              >
+              <input
+                type="text"
+                formControlName="amountVND"
+                (input)="formatCurrency($event, 'amountVND')"
+                class="w-full border rounded-md py-2 px-3 text-right font-mono"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Số tiền (USD)</label
+              >
+              <input
+                type="text"
+                formControlName="amountUSD"
+                (input)="formatCurrency($event, 'amountUSD')"
+                class="w-full border rounded-md py-2 px-3 text-right font-mono"
+                placeholder="0"
+              />
+            </div>
+          </div>
+
+          <!-- New Attachments UI -->
+          <div class="bg-white border rounded-lg overflow-hidden">
+            <div
+              class="bg-gray-100 px-4 py-2 border-b flex justify-between items-center"
+            >
+              <label class="text-sm font-bold text-gray-700 uppercase"
+                >Hồ sơ đính kèm</label
+              >
+              <button
+                type="button"
+                (click)="addNewAttachment()"
+                class="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-sm hover:bg-blue-700 font-bold"
+              >
+                +
+              </button>
+            </div>
+            <!-- Uploaded Files Section -->
+            @if (
+              orderData()?.uploadedFiles &&
+              orderData()!.uploadedFiles!.length > 0
+            ) {
+              <div class="mt-6">
+                <h4
+                  class="text-xs font-bold text-gray-400 uppercase mb-3 tracking-widest"
+                >
+                  Tài liệu đính kèm (File)
+                </h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  @for (file of orderData()!.uploadedFiles; track $index) {
+                    <div
+                      class="p-3 border rounded-lg bg-gray-50 flex items-center justify-between group hover:border-blue-300 transition-colors"
+                    >
+                      <div class="flex items-center gap-3 overflow-hidden">
+                        <span class="text-xl">
+                          {{
+                            file.type.includes("image")
+                              ? "🖼️"
+                              : file.type.includes("pdf")
+                                ? "📕"
+                                : "📄"
+                          }}
+                        </span>
+                        <div class="flex flex-col overflow-hidden">
+                          <span class="text-xs font-bold truncate">{{
+                            file.name
+                          }}</span>
+                          <span class="text-[8px] text-gray-400 uppercase">{{
+                            file.type.split("/")[1] || "FILE"
+                          }}</span>
+                        </div>
+                      </div>
+                      <a
+                        [href]="file.data"
+                        [download]="file.name"
+                        class="text-blue-500 hover:text-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          class="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                          />
+                        </svg>
+                      </a>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
+            <div class="p-4 space-y-3">
+              <div
+                *ngFor="let att of customAttachments; let i = index"
+                class="flex items-center gap-3 animate-fade-in group"
+              >
+                <input
+                  type="checkbox"
+                  [checked]="att.checked"
+                  (change)="toggleCustomAtt(i)"
+                  class="w-4 h-4 text-blue-600 rounded"
+                />
+                <div class="flex-1">
+                  <input
+                    type="text"
+                    [(ngModel)]="att.name"
+                    [ngModelOptions]="{ standalone: true }"
+                    placeholder="Tên hồ sơ..."
+                    class="w-full border-b border-gray-200 focus:border-blue-500 outline-none text-sm py-1 font-medium bg-transparent"
+                  />
+                </div>
+                <div class="flex items-center border rounded h-8">
+                  <button
+                    type="button"
+                    (click)="updateCustomQty(i, -1)"
+                    class="px-2 py-1 bg-gray-50 hover:bg-gray-200"
+                  >
+                    -
+                  </button>
+                  <span class="px-3 text-xs font-mono font-bold">{{
+                    att.qty
+                  }}</span>
+                  <button
+                    type="button"
+                    (click)="updateCustomQty(i, 1)"
+                    class="px-2 py-1 bg-gray-50 hover:bg-gray-200"
+                  >
+                    +
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  (click)="removeCustomAtt(i)"
+                  class="text-red-400 hover:text-red-600 font-bold px-2"
+                >
+                  X
+                </button>
+              </div>
+              <div
+                *ngIf="customAttachments.length === 0"
+                class="text-center py-4 text-gray-400 text-xs italic border-2 border-dashed rounded"
+              >
+                Bấm "+" để thêm hồ sơ cần bàn giao.
+              </div>
+            </div>
+          </div>
+
+          <!-- File Upload Framework -->
+          <div class="bg-white border rounded-lg overflow-hidden">
+            <div
+              class="bg-gray-100 px-4 py-2 border-b flex justify-between items-center"
+            >
+              <label class="text-sm font-bold text-gray-700 uppercase"
+                >Tài liệu bổ sung (PDF, Ảnh, Word)</label
+              >
+            </div>
+            <div class="p-4">
+              <div
+                class="relative border-2 border-dashed border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center hover:bg-blue-50 transition-colors cursor-pointer group"
+              >
+                <input
+                  type="file"
+                  multiple
+                  (change)="onFilesUploaded($event)"
+                  class="absolute inset-0 opacity-0 cursor-pointer"
+                />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-10 w-10 text-gray-400 mb-2 group-hover:text-blue-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
+                </svg>
+                <p class="text-xs text-gray-500">
+                  Chọn hoặc kéo thả tệp vào đây
+                </p>
+                <p class="text-[10px] text-gray-400 mt-1 uppercase font-bold">
+                  Hỗ trợ File PDF, Hình ảnh, Word (.doc, .docx)
+                </p>
+              </div>
+
+              @if (uploadedFileList().length > 0) {
+                <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  @for (file of uploadedFileList(); track $index) {
+                    <div
+                      class="flex items-center justify-between p-2 bg-gray-50 rounded border text-xs border-gray-100 group"
+                    >
+                      <div class="flex items-center gap-2 truncate">
+                        <span class="text-blue-500">📎</span>
+                        <span class="truncate font-medium">{{
+                          file.name
+                        }}</span>
+                        <span class="text-[8px] text-gray-400 uppercase"
+                          >({{ file.type }})</span
+                        >
+                      </div>
+                      <button
+                        type="button"
+                        (click)="removeUploadedFile($index)"
+                        class="text-gray-400 hover:text-red-500"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div
+            class="flex items-center justify-end space-x-4 pt-4 border-t mt-4"
+          >
+            <button
+              type="button"
+              (click)="cancel.emit()"
+              class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Hủy Bỏ
+            </button>
+            <button
+              type="submit"
+              [disabled]="form.invalid"
+              class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-black text-white bg-blue-600 hover:bg-blue-700 focus:outline-none disabled:opacity-50 uppercase tracking-tight"
+            >
+              {{ isEditMode() ? "Cập Nhật" : "Tạo Yêu Cầu" }}
+            </button>
+          </div>
+        </form>
+      }
+    </div>
+  `,
+})
+export class OrderFormComponent implements OnInit {
+  orderData = input<Order | null>(null);
+  save = output<Partial<Order>>();
+  cancel = output<void>();
+
+  private fb = inject(FormBuilder);
+  private customerService = inject(CustomerService);
+
+  form!: FormGroup;
+  // customers = this.dataService.getAllCustomers();
+  customers = this.customerService.customers;
+
+  departments = DEPARTMENTS;
+  senders = SENDERS;
+
+  customAttachments: { name: string; qty: number; checked: boolean }[] = [];
+  uploadedFileList = signal<{ name: string; type: string; data: string }[]>([]);
+
+  provinces = ["TP.HCM", "Hà Nội", "Đà Nẵng", "Long An", "Bình Dương"];
+  districts: Record<string, string[]> = {
+    "TP.HCM": ["Quận 1", "Quận 3", "Quận 7", "Quận 8", "Bình Thạnh", "Thủ Đức"],
+    "Hà Nội": ["Ba Đình", "Hoàn Kiếm", "Cầu Giấy"],
+    "Long An": ["Tân An", "Bến Lức"],
+    "Bình Dương": ["Thủ Dầu Một", "Thuận An"],
+  };
+
+  selectedAttachments = signal<Map<string, number>>(new Map());
+  isAutofilled = signal(false);
+  selectedSenderPhone = signal("");
+
+  isEditMode = computed(() => !!this.orderData());
+
+  ngOnInit() {
+    const data = this.orderData();
+
+    if (data && data.attachments) {
+      this.customAttachments = data.attachments.map((a) => ({ ...a }));
+    } else {
+      this.customAttachments = [
+        { name: "Hộ chiếu", qty: 1, checked: false },
+        { name: "Visa", qty: 1, checked: false },
+        { name: "Giấy phép lao động (GPLĐ)", qty: 1, checked: false },
+        { name: "Thẻ tạm trú", qty: 1, checked: false },
+      ];
+    }
+
+    if (data && data.uploadedFiles) {
+      this.uploadedFileList.set([...data.uploadedFiles]);
+    }
+
+    if (data && data.senderPhone) {
+      this.selectedSenderPhone.set(data.senderPhone);
+    }
+
+    this.form = this.fb.group({
+      department: [data?.department || "Visa Việt Nam", Validators.required],
+      senderName: [data?.senderName || "", Validators.required],
+      phone: [data?.phone || "", Validators.required],
+      company: [data?.company || "", Validators.required],
+      addressLine: [data?.addressLine || "", Validators.required],
+      ward: [data?.ward || ""],
+      district: [data?.district || ""],
+      province: [data?.province || ""],
+      contact: [data?.contact || "", Validators.required],
+      time: [data?.time || "08:00", Validators.required],
+      date: [
+        data?.date || new Date().toISOString().split("T")[0],
+        Validators.required,
+      ],
+      purpose: [data?.purpose || "", Validators.required],
+      notes: [data?.notes || ""],
+      amountVND: [data?.amountVND ? this.formatNumber(data.amountVND) : ""],
+      amountUSD: [data?.amountUSD ? this.formatNumber(data.amountUSD) : ""],
+    });
+
+    this.customerService.getAllCustomers();
+  }
+
+  combinedAddress = computed(() => {
+    const vals = this.form?.value;
+    if (!vals) return "";
+    const parts = [vals.addressLine, vals.ward, vals.district, vals.province];
+    return parts.filter((p) => !!p).join(", ");
+  });
+
+  onProvinceChange(event: any) {
+    this.form.get("district")?.setValue("");
+  }
+
+  onDistrictChange(event: any) {
+    // Optional additional logic
+  }
+
+  onSenderChange() {
+    const name = this.form.get("senderName")?.value;
+    const sender = this.senders.find((s) => s.name === name);
+    this.selectedSenderPhone.set(sender ? sender.phone : "");
+  }
+
+  onPhoneBlur() {
+    const phone = this.form.get("phone")?.value;
+    if (phone) {
+      const customer = this.customerService.findCustomerByPhone(phone);
+      if (customer) {
+        this.fillCustomerData(customer);
+      }
+    }
+  }
+
+  onCompanyChange() {
+    const company = this.form.get("company")?.value;
+    if (company) {
+      const customer = this.customerService.findCustomerByCompany(company);
+      if (customer) {
+        this.fillCustomerData(customer);
+      }
+    }
+  }
+
+  fillCustomerData(customer: any) {
+    this.form.patchValue({
+      company: customer.company,
+      addressLine: customer.address, // Use full address as fallback line
+      contact: customer.contact,
+      phone: customer.phone,
+    });
+    this.isAutofilled.set(true);
+    setTimeout(() => this.isAutofilled.set(false), 2000);
+  }
+
+  addNewAttachment() {
+    this.customAttachments.push({ name: "", qty: 1, checked: false });
+  }
+
+  toggleCustomAtt(index: number) {
+    this.customAttachments[index].checked =
+      !this.customAttachments[index].checked;
+  }
+
+  updateCustomQty(index: number, delta: number) {
+    const newQty = Math.max(1, this.customAttachments[index].qty + delta);
+    this.customAttachments[index].qty = newQty;
+  }
+
+  removeCustomAtt(index: number) {
+    this.customAttachments.splice(index, 1);
+  }
+
+  async onFilesUploaded(event: any) {
+    const files = event.target.files as FileList;
+    if (!files) return;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const reader = new FileReader();
+      reader.onload = (e: any) => {
+        this.uploadedFileList.update((list) => [
+          ...list,
+          {
+            name: file.name,
+            type: file.type || "application/octet-stream",
+            data: e.target.result, // base64
+          },
+        ]);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  removeUploadedFile(index: number) {
+    this.uploadedFileList.update((list) => list.filter((_, i) => i !== index));
+  }
+
+  formatNumber(val: number): string {
+    return new Intl.NumberFormat("en-US").format(val);
+  }
+
+  formatCurrency(event: any, controlName: string) {
+    let val = event.target.value.replace(/,/g, "");
+    if (!isNaN(val) && val !== "") {
+      const formatted = this.formatNumber(parseInt(val));
+      this.form.get(controlName)?.setValue(formatted, { emitEvent: false });
+    }
+  }
+
+  onSubmit() {
+    if (this.form.valid) {
+      const formVal = this.form.value;
+
+      // Filter out empty names and only include checked ones if desired,
+      // but here we might want all in the checklist.
+      // Actually, per user request, we want to add custom items.
+      const attachments: Attachment[] = this.customAttachments
+        .filter((a) => a.name.trim() !== "")
+        .map((a) => ({ ...a, name: a.name.trim() }));
+
+      const payload: Partial<Order> = {
+        ...formVal,
+        amountVND: formVal.amountVND
+          ? parseInt(formVal.amountVND.replace(/,/g, ""))
+          : 0,
+        amountUSD: formVal.amountUSD
+          ? parseInt(formVal.amountUSD.replace(/,/g, ""))
+          : 0,
+        senderPhone: this.selectedSenderPhone(),
+        attachments,
+        uploadedFiles: this.uploadedFileList(),
+      };
+
+      this.save.emit(payload);
+    }
+  }
+}
