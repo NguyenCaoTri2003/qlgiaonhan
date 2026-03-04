@@ -6,7 +6,6 @@ import {
   CdkDragDrop,
   moveItemInArray,
 } from "@angular/cdk/drag-drop";
-// import { DataService, Order, OrderStatus, DepartmentType, FilterType, LocationData } from '../../services/data.service';
 import { OrderService } from "../../services/order.service";
 import { AuthService } from "../../services/auth.service";
 import {
@@ -16,12 +15,36 @@ import {
   Order,
   OrderStatus,
 } from "../../type/models";
+import { OrderDetailComponent } from "../order-detail/order-detail.component";
+import { OrderFormComponent } from "../order-form/order-form.component";
 
 @Component({
   selector: "app-order-list",
   standalone: true,
-  imports: [CommonModule, FormsModule, DragDropModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    DragDropModule,
+    OrderDetailComponent,
+    OrderFormComponent,
+  ],
   template: `
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold text-gray-800">
+        DANH SÁCH CÔNG VIỆC (JOB LIST)
+      </h2>
+
+      @if (
+        authService.userRole() === "NVADMIN" || authService.userRole() === "IT"
+      ) {
+        <button
+          (click)="openCreate()"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center shadow transition"
+        >
+          <span>Tạo Yêu Cầu Mới</span>
+        </button>
+      }
+    </div>
     <div class="space-y-4">
       <!-- Search & Filters Toolbar -->
       <div
@@ -153,7 +176,7 @@ import {
               <div
                 [class]="
                   'absolute left-0 top-0 bottom-0 w-1 ' +
-                  getDeptColorClass(order.department)
+                  getDeptColorClass(order.department.code)
                 "
               ></div>
 
@@ -166,9 +189,9 @@ import {
                   <span
                     [class]="
                       'text-[10px] font-bold uppercase tracking-wide ' +
-                      getDeptTextColorClass(order.department)
+                      getDeptTextColorClass(order.department.code)
                     "
-                    >{{ order.department }}</span
+                    >{{ order.department.name || "Không rõ phòng ban" }}</span
                   >
                 </div>
                 <div class="flex flex-col items-end gap-2 shrink-0 ml-2">
@@ -184,7 +207,7 @@ import {
                     <button
                       *ngIf="
                         authService.userRole() === 'NVADMIN' &&
-                        order.status === 'Chờ tiếp nhận'
+                        order.status === 'PENDING'
                       "
                       (click)="confirmDelete($event, order)"
                       class="ml-2 bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded text-[10px] font-bold hover:bg-red-100 transition-colors uppercase"
@@ -205,7 +228,9 @@ import {
                     🚫 Từ chối: {{ order.rejectionReason }}
                   </div>
                 }
-                @if (order.status === "Bổ sung" && order.supplementNote) {
+                @if (
+                  order.status === "SUPPLEMENT_REQUIRED" && order.supplementNote
+                ) {
                   <div
                     class="text-[10px] text-orange-700 font-bold break-words bg-orange-50 p-1 rounded border border-orange-100"
                   >
@@ -216,14 +241,14 @@ import {
                     </div>
                   </div>
                 }
-                @if (order.status === "Đang xử lý" && order.missingDocs) {
+                @if (order.status === "PROCESSING" && order.missingDocs) {
                   <div
                     class="text-[10px] text-orange-700 font-bold break-words bg-orange-50 p-1 rounded border border-orange-100"
                   >
                     ⚠️ Thiếu hồ sơ: {{ order.missingDocs }}
                   </div>
                 }
-                @if (order.status === "Chưa hoàn thành" && order.reviewNote) {
+                @if (order.status === "INCOMPLETE" && order.reviewNote) {
                   <div
                     class="text-[10px] text-red-700 font-bold break-words bg-red-50 p-1 rounded border border-red-100"
                   >
@@ -316,7 +341,7 @@ import {
                       ? getShipperHighlightClass(order.shipperHighlightColor)
                       : 'hover:bg-blue-50')
                   "
-                  (click)="select.emit(order)"
+                  (click)="openDetail(order)"
                 >
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-xs font-medium text-blue-600">
@@ -325,10 +350,10 @@ import {
                     <div
                       [class]="
                         'text-xs font-semibold mt-1 ' +
-                        getDeptTextColorClass(order.department)
+                        getDeptTextColorClass(order.department.code) 
                       "
                     >
-                      {{ order.department }}
+                      {{ order.department.name || "Không rõ phòng ban" }}
                     </div>
                     <div class="text-xs text-gray-400 mt-1">
                       {{ order.date | date: "dd/MM" }} - {{ order.time }}
@@ -392,7 +417,7 @@ import {
                         <button
                           *ngIf="
                             authService.userRole() === 'NVADMIN' &&
-                            order.status === 'Chờ tiếp nhận'
+                            order.status === 'PENDING'
                           "
                           (click)="confirmDelete($event, order)"
                           class="bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded text-[10px] font-bold hover:bg-red-100 transition-colors uppercase"
@@ -400,7 +425,10 @@ import {
                           Xóa
                         </button>
                       </div>
-                      @if (order.status === "Bổ sung" && order.supplementNote) {
+                      @if (
+                        order.status === "SUPPLEMENT_REQUIRED" &&
+                        order.supplementNote
+                      ) {
                         <div
                           class="text-[10px] text-orange-600 max-w-[150px] truncate"
                         >
@@ -411,14 +439,12 @@ import {
                           {{ order.supplementDate | date: "HH:mm dd/MM" }}
                         </div>
                       }
-                      @if (order.status === "Đang xử lý" && order.missingDocs) {
+                      @if (order.status === "PROCESSING" && order.missingDocs) {
                         <div class="text-[10px] text-orange-600">
                           ⚠️ Thiếu: {{ order.missingDocs }}
                         </div>
                       }
-                      @if (
-                        order.status === "Chưa hoàn thành" && order.reviewNote
-                      ) {
+                      @if (order.status === "INCOMPLETE" && order.reviewNote) {
                         <div class="text-[10px] text-red-600 font-bold">
                           ❌ {{ order.reviewNote }}
                         </div>
@@ -467,6 +493,30 @@ import {
           </div>
         </div>
       </div>
+
+      @if (selectedOrder()) {
+        <app-order-detail
+          [order]="selectedOrder()!"
+          (close)="selectedOrder.set(null)"
+          (edit)="startEdit($event)"
+        />
+      }
+
+      <!-- ===== MODAL FORM ===== -->
+      @if (showCreateForm()) {
+        <div
+          class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
+          (click)="closeForm()"
+        >
+          <div class="w-full max-w-4xl" (click)="$event.stopPropagation()">
+            <app-order-form
+              [orderData]="editingOrder()"
+              (save)="saveOrder($event)"
+              (cancel)="closeForm()"
+            />
+          </div>
+        </div>
+      }
 
       <!-- Action Overlay -->
       <div
@@ -518,7 +568,7 @@ import {
 
             <!-- Dynamic Forms -->
             <div *ngIf="authService.userRole() === 'NVADMIN'">
-              <div *ngIf="sel.status === 'Xử lý Xong'" class="space-y-3">
+              <div *ngIf="sel.status === 'COMPLETED'" class="space-y-3">
                 <p class="text-green-600 font-bold">
                   Shipper đã hoàn thành! Kiểm tra ngay.
                 </p>
@@ -542,10 +592,7 @@ import {
                   class="w-full border p-2 rounded text-sm mt-2"
                 ></textarea>
               </div>
-              <div
-                *ngIf="sel.status === 'Chờ tiếp nhận'"
-                class="mt-4 pt-4 border-t"
-              >
+              <div *ngIf="sel.status === 'PENDING'" class="mt-4 pt-4 border-t">
                 <button
                   (click)="confirmDelete($event, sel)"
                   class="w-full bg-red-600 text-white py-3 rounded font-bold uppercase shadow-md hover:bg-red-700 transition-all"
@@ -558,7 +605,7 @@ import {
             <div *ngIf="authService.userRole() === 'QL'">
               <div
                 *ngIf="
-                  ['Chờ tiếp nhận', 'Từ chối nhận', 'Bổ sung'].includes(
+                  ['PENDING', 'REJECTED', 'SUPPLEMENT_REQUIRED'].includes(
                     sel.status
                   )
                 "
@@ -591,7 +638,7 @@ import {
             </div>
 
             <div *ngIf="authService.userRole() === 'NVGN'">
-              <div *ngIf="sel.status === 'Đã điều phối'" class="space-y-3">
+              <div *ngIf="sel.status === 'ASSIGNED'" class="space-y-3">
                 <div class="bg-gray-50 p-3 rounded border">
                   <p class="text-[10px] font-bold mb-2 uppercase text-gray-400">
                     Kiểm tra hồ sơ tại chỗ
@@ -629,7 +676,7 @@ import {
                 </div>
               </div>
 
-              <div *ngIf="sel.status === 'Đang xử lý'" class="space-y-3">
+              <div *ngIf="sel.status === 'PROCESSING'" class="space-y-3">
                 <div class="border p-3 rounded bg-gray-50">
                   <p class="text-[10px] font-bold mb-2 uppercase text-gray-400">
                     Upload Ảnh hiện trường
@@ -703,6 +750,41 @@ export class OrderListComponent {
   actionReason = "";
   mockSignature = "";
 
+  selectedOrder = signal<Order | null>(null);
+  showCreateForm = signal(false);
+  editingOrder = signal<Order | null>(null);
+
+  openCreate() {
+    this.editingOrder.set(null);
+    this.showCreateForm.set(true);
+  }
+
+  openDetail(order: Order) {
+    this.orderService.getOrderDetail(order.id).subscribe((fullOrder) => {
+      this.selectedOrder.set(fullOrder);
+    });
+  }
+
+  startEdit(order: Order) {
+    this.selectedOrder.set(null);
+    this.editingOrder.set(order);
+    this.showCreateForm.set(true);
+  }
+
+  closeForm() {
+    this.showCreateForm.set(false);
+    this.editingOrder.set(null);
+  }
+
+  saveOrder(data: Partial<Order>) {
+    if (this.editingOrder()) {
+      this.orderService.updateOrder(this.editingOrder()!.id, data);
+    } else {
+      this.orderService.addOrder(data);
+    }
+    this.closeForm();
+  }
+
   // Mock data for dropdowns
   provinces = ["TP.HCM", "Hà Nội", "Đà Nẵng", "Long An", "Bình Dương"];
   districts: Record<string, string[]> = {
@@ -759,11 +841,10 @@ export class OrderListComponent {
     const role = this.authService.userRole();
     if (!role) return false;
 
-    if (role === "NVADMIN") return o.status === "Xử lý Xong";
+    if (role === "NVADMIN") return o.status === "COMPLETED";
     if (role === "QL")
-      return ["Chờ tiếp nhận", "Từ chối nhận", "Bổ sung"].includes(o.status);
-    if (role === "NVGN")
-      return ["Đã điều phối", "Đang xử lý"].includes(o.status);
+      return ["PENDING", "REJECTED", "SUPPLEMENT_REQUIRED"].includes(o.status);
+    if (role === "NVGN") return ["ASSIGNED", "PROCESSING"].includes(o.status);
     return false;
   }
 
@@ -852,29 +933,29 @@ export class OrderListComponent {
     const list = this.filteredOrders();
     const newItems = [...list];
     moveItemInArray(newItems, event.previousIndex, event.currentIndex);
-    const orderIds = newItems.map((o) => o.id);
+    const orderIds = newItems.map((o) => String(o.id));
     this.orderService.updateOrderSort(
       this.authService.currentUser()?.email || "unknown",
       orderIds,
     );
   }
 
-  // 1. Scope Data by Role first
+  // Sắp xếp & lọc orders theo role
   rawScopedOrders = computed(() => {
     const all = this.orderService.orders();
     const role = this.authService.userRole();
     const userEmail = this.authService.currentUser()?.email;
 
-    if (role === "QL" || role === "IT") return all;
-    if (role === "NVADMIN")
-      return all.filter(
-        (o) => o.creator === userEmail || o.status === "Xử lý Xong",
-      );
+    if (role === "QL" || role === "IT" || role === "NVADMIN") {
+      return all;
+    }
+
     if (role === "NVGN") {
       return all.filter(
-        (o) => o.receiver === userEmail && o.status !== "Bổ sung",
+        (o) => o.receiver === userEmail && o.status !== "SUPPLEMENT_REQUIRED",
       );
     }
+
     return [];
   });
 
@@ -892,7 +973,7 @@ export class OrderListComponent {
     if (search) {
       result = result.filter(
         (o) =>
-          o.id.toLowerCase().includes(search) ||
+          String(o.id).toLowerCase().includes(search) ||
           (o.orderId && o.orderId.toLowerCase().includes(search)) ||
           (o.company || "").toLowerCase().includes(search) ||
           o.address.toLowerCase().includes(search) ||
@@ -900,19 +981,19 @@ export class OrderListComponent {
       );
     }
 
-    if (dept) result = result.filter((o) => o.department === dept);
+    if (dept) result = result.filter((o) => o.department?.name === dept);
     if (prov) result = result.filter((o) => o.province === prov);
     if (dist) result = result.filter((o) => o.district === dist);
 
     if (filter === "PENDING_GROUP") {
       result = result.filter((o) =>
-        ["Chờ tiếp nhận", "Đã điều phối", "Đang xử lý", "Bổ sung"].includes(
+        ["PENDING", "ASSIGNED", "PROCESSING", "SUPPLEMENT_REQUIRED"].includes(
           o.status,
         ),
       );
     } else if (filter === "DONE_GROUP") {
       result = result.filter((o) =>
-        ["Xử lý Xong", "Hoàn tất"].includes(o.status),
+        ["COMPLETED", "FINISHED"].includes(o.status),
       );
     }
 
@@ -943,52 +1024,52 @@ export class OrderListComponent {
 
   getStatusLabel(status: OrderStatus): string {
     const map: Record<OrderStatus, string> = {
-      "Chờ tiếp nhận": "Chờ tiếp nhận",
-      "Đã điều phối": "Đã điều phối",
-      "Đang xử lý": "Đang thực hiện",
-      "Xử lý Xong": "Đã xong",
-      "Hoàn tất": "Hoàn tất",
-      "Từ chối nhận": "Đã từ chối",
-      "Bổ sung": "Cần bổ sung",
-      "Chưa hoàn thành": "Không duyệt",
+      PENDING: "Chờ tiếp nhận",
+      ASSIGNED: "Đã điều phối",
+      PROCESSING: "Đang thực hiện",
+      COMPLETED: "Đã xong",
+      FINISHED: "Hoàn tất",
+      REJECTED: "Đã từ chối",
+      SUPPLEMENT_REQUIRED: "Cần bổ sung",
+      INCOMPLETE: "Chưa hoàn thành",
     };
     return map[status] || status;
   }
 
   getStatusClass(status: OrderStatus): string {
     const map: Record<OrderStatus, string> = {
-      "Chờ tiếp nhận": "bg-red-100 text-red-800",
-      "Đã điều phối": "bg-blue-100 text-blue-800",
-      "Đang xử lý": "bg-yellow-100 text-yellow-800",
-      "Xử lý Xong": "bg-purple-100 text-purple-800",
-      "Hoàn tất": "bg-green-100 text-green-800",
-      "Từ chối nhận": "bg-gray-100 text-gray-800",
-      "Bổ sung": "bg-orange-100 text-orange-800",
-      "Chưa hoàn thành": "bg-red-50 text-red-600",
+      PENDING: "bg-red-100 text-red-800",
+      ASSIGNED: "bg-blue-100 text-blue-800",
+      PROCESSING: "bg-yellow-100 text-yellow-800",
+      COMPLETED: "bg-purple-100 text-purple-800",
+      FINISHED: "bg-green-100 text-green-800",
+      REJECTED: "bg-gray-100 text-gray-800",
+      SUPPLEMENT_REQUIRED: "bg-orange-100 text-orange-800",
+      INCOMPLETE: "bg-red-50 text-red-600",
     };
     return map[status] || "bg-gray-100 text-gray-800";
   }
 
-  getDeptColorClass(dept: DepartmentType): string {
+  getDeptColorClass(dept: string): string {
     switch (dept) {
-      case "Visa Việt Nam":
+      case "VISA_VN":
         return "bg-blue-500";
-      case "Visa Nước Ngoài":
+      case "VISA_FOREIGN":
         return "bg-purple-500";
-      case "Giấy Phép Lao Động":
+      case "WORK_PERMIT":
         return "bg-teal-500";
       default:
         return "bg-gray-400";
     }
   }
 
-  getDeptTextColorClass(dept: DepartmentType): string {
+  getDeptTextColorClass(dept: string): string {
     switch (dept) {
-      case "Visa Việt Nam":
+      case "VISA_VN":
         return "text-blue-600";
-      case "Visa Nước Ngoài":
+      case "VISA_FOREIGN":
         return "text-purple-600";
-      case "Giấy Phép Lao Động":
+      case "WORK_PERMIT":
         return "text-teal-600";
       default:
         return "text-gray-600";

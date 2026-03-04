@@ -17,10 +17,15 @@ export class CustomerService {
     });
   }
 
+  searchCompanies(keyword: string, page: number) {
+    return this.http.post<any>(`${this.API}/customers/search-customers-nhigia`, {
+      keyword,
+      page,
+    });
+  }
+  
   findCustomerByPhone(phone: string) {
-    return this.http.get<CustomerData>(
-      `${this.API}/customers/phone/${phone}`,
-    );
+    return this.http.get<CustomerData>(`${this.API}/customers/phone/${phone}`);
   }
 
   findCustomerByCompany(company: string) {

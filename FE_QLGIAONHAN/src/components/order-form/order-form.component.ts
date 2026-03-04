@@ -6,6 +6,7 @@ import {
   input,
   output,
   signal,
+  HostListener,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import {
@@ -15,8 +16,10 @@ import {
   Validators,
   FormsModule,
 } from "@angular/forms";
-import { Attachment, DEPARTMENTS, Order, SENDERS } from "../../type/models";
+import { Attachment, Order, SENDERS } from "../../type/models";
 import { CustomerService } from "../../services/customer.service";
+import { UsersService } from "../../services/users.service";
+import { DepartmentService } from "../../services/department.service";
 
 @Component({
   selector: "app-order-form",
@@ -91,7 +94,7 @@ import { CustomerService } from "../../services/customer.service";
                 formControlName="department"
                 class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
               >
-                @for (dept of departments; track dept) {
+                @for (dept of departments(); track dept) {
                   <option [value]="dept">{{ dept }}</option>
                 }
               </select>
@@ -107,7 +110,7 @@ import { CustomerService } from "../../services/customer.service";
                   class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
                 >
                   <option value="">-- Chọn Người Giao --</option>
-                  @for (sender of senders; track sender.name) {
+                  @for (sender of senders(); track sender.id) {
                     <option [value]="sender.name">{{ sender.name }}</option>
                   }
                 </select>
@@ -136,7 +139,6 @@ import { CustomerService } from "../../services/customer.service";
                 <input
                   type="text"
                   formControlName="phone"
-                  (blur)="onPhoneBlur()"
                   class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Nhập SĐT để tự động điền"
                 />
@@ -160,94 +162,99 @@ import { CustomerService } from "../../services/customer.service";
             </div>
 
             <!-- Company -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"
-                >Tên công ty / Khách hàng</label
-              >
-              <select
+            <div class="relative company-dropdown-wrapper">
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Tên công ty / Khách hàng
+              </label>
+
+              <input
+                type="text"
                 formControlName="company"
-                (change)="onCompanyChange()"
-                class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 bg-white"
-              >
-                <option value="">-- Chọn công ty --</option>
-                @for (cust of customers(); track cust.company) {
-                  <option [value]="cust.company">{{ cust.company }}</option>
-                }
-              </select>
+                (input)="onCompanySearch($event)"
+                (focus)="openDropdown()"
+                class="w-full border rounded-md py-2 px-3 text-sm"
+                placeholder="Nhập tên công ty để tìm kiếm..."
+              />
+
+              @if (showDropdown()) {
+                <div
+                  class="absolute z-50 bg-white border w-full max-h-60 overflow-y-auto shadow-lg rounded-md mt-1 text-sm"
+                  (scroll)="onCompanyScroll($event)"
+                >
+                  @if (!currentKeyword()) {
+                    <div class="p-3 text-gray-400 italic text-center">
+                      🔎 Hãy nhập tên công ty để bắt đầu tìm kiếm...
+                    </div>
+                  }
+
+                  @if (
+                    currentKeyword() && companies().length === 0 && !isLoading()
+                  ) {
+                    <div class="p-3 text-gray-400 text-center">
+                      Không tìm thấy công ty phù hợp
+                    </div>
+                  }
+
+                  @for (cust of companies(); track cust.id) {
+                    <div
+                      class="px-3 py-2 hover:bg-blue-50 cursor-pointer transition text-[13px]"
+                      (click)="selectCompany(cust)"
+                    >
+                      {{ cust?.company_name }}
+                    </div>
+                  }
+
+                  @if (isLoading()) {
+                    <div class="p-2 text-center text-gray-500 text-xs">
+                      Đang tải dữ liệu...
+                    </div>
+                  }
+                </div>
+              }
             </div>
           </div>
 
           <!-- Address & Contact -->
-          <div class="bg-gray-50 p-4 rounded border border-gray-100 space-y-4">
+          <div class="bg-gray-50 p-4 rounded border border-gray-100 space-y-3">
             <h4
               class="text-xs font-bold text-gray-400 uppercase tracking-widest"
             >
-              Địa chỉ chi tiết
+              Địa chỉ giao nhận
             </h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Số địa chỉ (Tên đường, số nhà)</label
-                >
-                <input
-                  type="text"
-                  formControlName="addressLine"
-                  placeholder="Vd: 186-188 Nguyễn Duy"
-                  class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Tỉnh/TP</label
-                >
-                <select
-                  formControlName="province"
-                  (change)="onProvinceChange($event)"
-                  class="w-full border rounded-md py-2 px-3 bg-white"
-                >
-                  <option value="">-- Chọn Tỉnh/TP --</option>
-                  <option *ngFor="let p of provinces" [value]="p">
-                    {{ p }}
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Quận/Huyện</label
-                >
-                <select
-                  formControlName="district"
-                  (change)="onDistrictChange($event)"
-                  class="w-full border rounded-md py-2 px-3 bg-white"
-                >
-                  <option value="">-- Chọn Quận/Huyện --</option>
-                  <option
-                    *ngFor="
-                      let d of districts[form.get('province')?.value] || []
-                    "
-                    [value]="d"
-                  >
-                    {{ d }}
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Phường/Xã</label
-                >
-                <input
-                  type="text"
-                  formControlName="ward"
-                  placeholder="Vd: Phường 9"
-                  class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Địa chỉ đầy đủ
+              </label>
+
+              <textarea
+                formControlName="addressLine"
+                rows="3"
+                placeholder="Ví dụ: 186-188 Nguyễn Duy, Phường 9, Quận 8, TP.HCM"
+                class="w-full border rounded-md py-3 px-3 text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
+              ></textarea>
             </div>
-            <div
-              class="text-[10px] text-gray-500 italic bg-white p-2 border rounded"
-            >
-              Link Google Maps sẽ được tạo: <b>{{ combinedAddress() }}</b>
-            </div>
+
+            @if (form.get("addressLine")?.value) {
+              <div
+                class="text-[11px] text-gray-600 italic bg-white p-2 border rounded flex justify-between items-center"
+              >
+                <div class="truncate">
+                  Link Google Maps sẽ được tạo:
+                  <b class="ml-1">
+                    {{ form.get("addressLine")?.value }}
+                  </b>
+                </div>
+
+                <a
+                  [href]="googleMapLink()"
+                  target="_blank"
+                  class="ml-3 text-blue-600 hover:underline font-semibold text-xs whitespace-nowrap"
+                >
+                  📍 Mở Google Maps
+                </a>
+              </div>
+            }
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -577,28 +584,38 @@ export class OrderFormComponent implements OnInit {
   private customerService = inject(CustomerService);
 
   form!: FormGroup;
-  // customers = this.dataService.getAllCustomers();
   customers = this.customerService.customers;
 
-  departments = DEPARTMENTS;
-  senders = SENDERS;
+  // departments = DEPARTMENTS;
+  // senders = SENDERS;
+
+  private departmentService = inject(DepartmentService);
+
+  departments = computed(() =>
+    this.departmentService.departments().map((d) => d.name),
+  );
+
+  private usersService = inject(UsersService);
+  senders = signal<any[]>([]);
 
   customAttachments: { name: string; qty: number; checked: boolean }[] = [];
   uploadedFileList = signal<{ name: string; type: string; data: string }[]>([]);
-
-  provinces = ["TP.HCM", "Hà Nội", "Đà Nẵng", "Long An", "Bình Dương"];
-  districts: Record<string, string[]> = {
-    "TP.HCM": ["Quận 1", "Quận 3", "Quận 7", "Quận 8", "Bình Thạnh", "Thủ Đức"],
-    "Hà Nội": ["Ba Đình", "Hoàn Kiếm", "Cầu Giấy"],
-    "Long An": ["Tân An", "Bến Lức"],
-    "Bình Dương": ["Thủ Dầu Một", "Thuận An"],
-  };
 
   selectedAttachments = signal<Map<string, number>>(new Map());
   isAutofilled = signal(false);
   selectedSenderPhone = signal("");
 
   isEditMode = computed(() => !!this.orderData());
+
+  companies = signal<any[]>([]);
+  showDropdown = signal(false);
+  isLoading = signal(false);
+  currentPage = signal(1);
+  hasMore = signal(true);
+  currentKeyword = signal("");
+  isSelectedFromDropdown = signal(false);
+
+  googleMapLink = signal("");
 
   ngOnInit() {
     const data = this.orderData();
@@ -623,14 +640,14 @@ export class OrderFormComponent implements OnInit {
     }
 
     this.form = this.fb.group({
-      department: [data?.department || "Visa Việt Nam", Validators.required],
+      department: [
+        data?.department?.name || "Visa Việt Nam",
+        Validators.required,
+      ],
       senderName: [data?.senderName || "", Validators.required],
       phone: [data?.phone || "", Validators.required],
       company: [data?.company || "", Validators.required],
       addressLine: [data?.addressLine || "", Validators.required],
-      ward: [data?.ward || ""],
-      district: [data?.district || ""],
-      province: [data?.province || ""],
       contact: [data?.contact || "", Validators.required],
       time: [data?.time || "08:00", Validators.required],
       date: [
@@ -643,38 +660,112 @@ export class OrderFormComponent implements OnInit {
       amountUSD: [data?.amountUSD ? this.formatNumber(data.amountUSD) : ""],
     });
 
-    this.customerService.getAllCustomers();
+    this.form.get("addressLine")?.valueChanges.subscribe((val) => {
+      if (!val) {
+        this.googleMapLink.set("");
+        return;
+      }
+
+      const encoded = encodeURIComponent(val);
+      this.googleMapLink.set(
+        `https://www.google.com/maps/search/?api=1&query=${encoded}`,
+      );
+    });
+
+    this.usersService.getSenders().subscribe((res) => {
+      this.senders.set(res);
+    });
+
+    this.departmentService.loadDepartments();
+
+    
+  }
+
+  loadCompanies() {
+    if (!this.hasMore()) return;
+
+    this.isLoading.set(true);
+
+    this.customerService
+      .searchCompanies(this.currentKeyword(), this.currentPage())
+      .subscribe((res: any) => {
+        const newData = res.data || [];
+
+        if (newData.length === 0) {
+          this.hasMore.set(false);
+        } else {
+          this.companies.update((list) => [...list, ...newData]);
+        }
+
+        this.isLoading.set(false);
+      });
+  }
+
+  onCompanyScroll(event: any) {
+    const element = event.target;
+
+    if (element.scrollHeight - element.scrollTop <= element.clientHeight + 10) {
+      if (!this.isLoading() && this.hasMore()) {
+        this.currentPage.update((p) => p + 1);
+        this.loadCompanies();
+      }
+    }
+  }
+
+  selectCompany(cust: any) {
+    this.form.patchValue({
+      company: cust?.company_name || "",
+      addressLine: cust?.address || "",
+      contact: cust?.contact || "",
+      phone: cust?.phone || "",
+    });
+
+    this.isSelectedFromDropdown.set(true);
+    this.showDropdown.set(false);
   }
 
   combinedAddress = computed(() => {
-    const vals = this.form?.value;
-    if (!vals) return "";
-    const parts = [vals.addressLine, vals.ward, vals.district, vals.province];
-    return parts.filter((p) => !!p).join(", ");
+    return this.form?.get("addressLine")?.value || "";
   });
+
+  onCompanySearch(event: any) {
+    const keyword = event.target.value;
+    this.currentKeyword.set(keyword);
+    this.currentPage.set(1);
+    this.hasMore.set(true);
+    this.companies.set([]);
+
+    if (keyword.length < 1) return;
+
+    this.loadCompanies();
+  }
+
+  openDropdown() {
+    this.showDropdown.set(true);
+  }
+
+  closeDropdown() {
+    this.showDropdown.set(false);
+  }
+
+  @HostListener("document:click", ["$event"])
+  onClickOutside(event: Event) {
+    const target = event.target as HTMLElement;
+    if (!target.closest(".company-dropdown-wrapper")) {
+      this.showDropdown.set(false);
+    }
+  }
 
   onProvinceChange(event: any) {
     this.form.get("district")?.setValue("");
   }
 
-  onDistrictChange(event: any) {
-    // Optional additional logic
-  }
+  onDistrictChange(event: any) {}
 
   onSenderChange() {
     const name = this.form.get("senderName")?.value;
-    const sender = this.senders.find((s) => s.name === name);
+    const sender = this.senders().find((s) => s.name === name);
     this.selectedSenderPhone.set(sender ? sender.phone : "");
-  }
-
-  onPhoneBlur() {
-    const phone = this.form.get("phone")?.value;
-    if (phone) {
-      const customer = this.customerService.findCustomerByPhone(phone);
-      if (customer) {
-        this.fillCustomerData(customer);
-      }
-    }
   }
 
   onCompanyChange() {
@@ -690,7 +781,7 @@ export class OrderFormComponent implements OnInit {
   fillCustomerData(customer: any) {
     this.form.patchValue({
       company: customer.company,
-      addressLine: customer.address, // Use full address as fallback line
+      addressLine: customer.address,
       contact: customer.contact,
       phone: customer.phone,
     });
@@ -729,7 +820,7 @@ export class OrderFormComponent implements OnInit {
           {
             name: file.name,
             type: file.type || "application/octet-stream",
-            data: e.target.result, // base64
+            data: e.target.result,
           },
         ]);
       };
@@ -757,9 +848,6 @@ export class OrderFormComponent implements OnInit {
     if (this.form.valid) {
       const formVal = this.form.value;
 
-      // Filter out empty names and only include checked ones if desired,
-      // but here we might want all in the checklist.
-      // Actually, per user request, we want to add custom items.
       const attachments: Attachment[] = this.customAttachments
         .filter((a) => a.name.trim() !== "")
         .map((a) => ({ ...a, name: a.name.trim() }));

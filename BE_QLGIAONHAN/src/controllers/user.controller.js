@@ -1,4 +1,5 @@
 const pool = require("../config/database");
+const nhigiaService = require("../services/nhigia.service");
 
 exports.getUsers = async (req, res) => {
   const { role } = req.query;
@@ -15,6 +16,21 @@ exports.getUsers = async (req, res) => {
     const [rows] = await pool.query(query, params);
     res.json(rows);
 
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.getSenders = async (req, res) => {
+  try {
+    const data = await nhigiaService.fetchNhigiaUsers();
+
+    const mapped = data.data.map((u) => ({
+      id: u.iduser,
+      name: u.ten,
+    }));
+
+    res.json(mapped);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

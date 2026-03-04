@@ -63,6 +63,10 @@ export class OrderService {
       });
   }
 
+  getOrderDetail(id: number) {
+    return this.http.get<Order>(`${this.API}/orders/${id}`);
+  }
+
   addOrder(order: Partial<Order>) {
     this.http.post(`${this.API}/orders`, order).subscribe({
       next: () => this.refreshOrders(),
@@ -70,7 +74,7 @@ export class OrderService {
     });
   }
 
-  assignReceiver(id: string, email: string, name: string) {
+  assignReceiver(id: number, email: string, name: string) {
     this.http
       .post(`${this.API}/orders/${id}/assign`, {
         receiverEmail: email,
@@ -82,7 +86,7 @@ export class OrderService {
       });
   }
 
-  shipperAccept(id: string, missingDocs?: string) {
+  shipperAccept(id: number, missingDocs?: string) {
     this.http
       .post(`${this.API}/orders/${id}/accept`, {
         missingDocs,
@@ -93,7 +97,7 @@ export class OrderService {
       });
   }
 
-  shipperReject(id: string, reason: string) {
+  shipperReject(id: number, reason: string) {
     this.http
       .post(`${this.API}/orders/${id}/shipper-reject`, {
         reason,
@@ -105,7 +109,7 @@ export class OrderService {
   }
 
   shipperComplete(
-    id: string,
+    id: number,
     images: string[],
     location: LocationData,
     signature: string,
@@ -124,7 +128,7 @@ export class OrderService {
       });
   }
 
-  shipperReturnSupplement(id: string, note: string) {
+  shipperReturnSupplement(id: number, note: string) {
     this.http
       .post(`${this.API}/orders/${id}/shipper-return-supplement`, {
         note,
@@ -135,7 +139,7 @@ export class OrderService {
       });
   }
 
-  rejectOrder(id: string, reason: string) {
+  rejectOrder(id: number, reason: string) {
     this.http
       .post(`${this.API}/orders/${id}/reject`, {
         reason,
@@ -146,14 +150,14 @@ export class OrderService {
       });
   }
 
-  completeOrder(id: string) {
+  completeOrder(id: number) {
     this.http.post(`${this.API}/orders/${id}/complete`, {}).subscribe({
       next: () => this.refreshOrders(),
       error: (err) => console.error("Complete error:", err),
     });
   }
 
-  adminFinalize(id: string, approved: boolean, reason?: string) {
+  adminFinalize(id: number, approved: boolean, reason?: string) {
     this.http
       .post(`${this.API}/orders/${id}/finalize`, {
         approved,
@@ -165,17 +169,17 @@ export class OrderService {
       });
   }
 
-  deleteOrder(id: string) {
+  deleteOrder(id: number) {
     this.http.delete(`${this.API}/orders/${id}`).subscribe({
       next: () => this.refreshOrders(),
       error: (err) => console.error("Delete error:", err),
     });
   }
 
-  qlRequestSupplement(id: string, content: string) {
+  qlRequestSupplement(id: number, note: string) {
     this.http
       .post(`${this.API}/orders/${id}/request-supplement`, {
-        content,
+        note: note,
       })
       .subscribe({
         next: () => this.refreshOrders(),
@@ -183,7 +187,7 @@ export class OrderService {
       });
   }
 
-  updateOrder(id: string, updates: Partial<Order>) {
+  updateOrder(id: number, updates: Partial<Order>) {
     this.http.put(`${this.API}/orders/${id}`, updates).subscribe({
       next: () => this.refreshOrders(),
       error: (err) => console.error("Update order error:", err),
@@ -202,10 +206,10 @@ export class OrderService {
       });
   }
 
-  resolveRequest(orderId: string, note: string) {
+  resolveRequest(orderId: number, note: string) {
     this.http
       .put(`${this.API}/orders/${orderId}`, {
-        status: "Chờ tiếp nhận",
+        status: "PENDING",
         statusUpdateDate: Date.now(),
         adminResponse: note,
       })
@@ -215,12 +219,12 @@ export class OrderService {
       });
   }
 
-  requestInfo(orderId: string, note: string) {
+  requestInfo(orderId: number, note: string) {
     this.qlRequestSupplement(orderId, note);
   }
 
   setShipperHighlightColor(
-    orderId: string,
+    orderId: number,
     color: "red" | "blue" | "yellow" | null,
   ) {
     this.updateOrder(orderId, { shipperHighlightColor: color });

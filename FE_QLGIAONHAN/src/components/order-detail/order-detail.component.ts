@@ -15,7 +15,12 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { AuthService, User } from "../../services/auth.service";
 import { OrderService } from "../../services/order.service";
-import { Attachment, DepartmentType, Order, OrderStatus } from "../../type/models";
+import {
+  Attachment,
+  DepartmentType,
+  Order,
+  OrderStatus,
+} from "../../type/models";
 
 @Component({
   selector: "app-order-detail",
@@ -132,10 +137,10 @@ import { Attachment, DepartmentType, Order, OrderStatus } from "../../type/model
                 <span
                   [class]="
                     'px-3 py-1 rounded text-xs font-bold uppercase text-white ' +
-                    getDeptColorClass(order().department)
+                    getDeptColorClass(order().department?.code || '')
                   "
                 >
-                  {{ order().department }}
+                  {{ order().department?.name || "Không rõ phòng ban" }}
                 </span>
                 <span
                   [class]="
@@ -241,7 +246,7 @@ import { Attachment, DepartmentType, Order, OrderStatus } from "../../type/model
             </div>
 
             <!-- Rejection/Request Alert -->
-            @if (order().status === "Từ chối nhận") {
+            @if (order().status === "REJECTED") {
               <div class="mb-4 bg-red-50 p-3 rounded border border-red-200">
                 <p class="text-red-800 text-sm">
                   <strong>Lý do từ chối:</strong> {{ order().rejectionReason }}
@@ -250,12 +255,14 @@ import { Attachment, DepartmentType, Order, OrderStatus } from "../../type/model
             }
 
             <!-- Request Note (Warning) -->
-            @if (order().requestNote && order().status === "Bổ sung") {
+            @if (
+              order().supplementNote && order().status === "SUPPLEMENT_REQUIRED"
+            ) {
               <div
                 class="mb-4 bg-yellow-50 p-3 rounded border border-yellow-200"
               >
                 <p class="text-yellow-800 text-sm">
-                  <strong>Yêu cầu bổ sung:</strong> {{ order().requestNote }}
+                  <strong>Yêu cầu bổ sung:</strong> {{ order().supplementNote }}
                 </p>
               </div>
             }
@@ -426,7 +433,7 @@ import { Attachment, DepartmentType, Order, OrderStatus } from "../../type/model
 
             <!-- Completion Info (Read Only) -->
             @if (
-              order().status === "Xử lý Xong" || order().status === "Hoàn tất"
+              order().status === "COMPLETED" || order().status === "FINISHED"
             ) {
               <div class="border-t pt-4 mt-4 bg-green-50 p-4 rounded-lg">
                 <h4 class="font-bold text-green-800 mb-2 flex items-center">
@@ -595,7 +602,7 @@ import { Attachment, DepartmentType, Order, OrderStatus } from "../../type/model
             }
 
             <!-- NVADMIN DELETE ACTION -->
-            @if (isAdmin() && order().status === "Chờ tiếp nhận") {
+            @if (isAdmin() && order().status === "PENDING") {
               <button
                 (click)="confirmDeleteDetail()"
                 class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm"
@@ -607,8 +614,8 @@ import { Attachment, DepartmentType, Order, OrderStatus } from "../../type/model
             <!-- NVADMIN APPROVAL ACTIONS -->
             @if (
               isAdmin() &&
-              (order().status === "Xử lý Xong" ||
-                order().status === "Chưa hoàn thành")
+              (order().status === "COMPLETED" ||
+                order().status === "INCOMPLETE")
             ) {
               <div class="flex gap-2">
                 <button
@@ -629,40 +636,57 @@ import { Attachment, DepartmentType, Order, OrderStatus } from "../../type/model
             <!-- MANAGER ACTIONS (QL) OR IT -->
             @if (
               (isManager() || isIT()) &&
-              (order().status === "Chờ tiếp nhận" ||
-                order().status === "Từ chối nhận" ||
-                order().status === "Bổ sung")
+              (order().status === "PENDING" ||
+                order().status === "REJECTED" ||
+                order().status === "SUPPLEMENT_REQUIRED")
             ) {
-              <div class="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
-                <select
-                  #shipperSelect
-                  class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md border"
-                >
-                  <option value="">Chọn Người Nhận</option>
-                  @for (s of shippers(); track s.email) {
-                    <option [value]="s.email">{{ s.name }}</option>
-                  }
-                </select>
-                <button
-                  (click)="assign(shipperSelect.value)"
-                  class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:text-sm"
-                >
-                  Điều phối
-                </button>
-                <button
-                  (click)="
-                    showRequestInput.set(false); showRequestInput.set(true)
-                  "
-                  class="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:text-sm"
-                >
-                  Yêu cầu bổ sung
-                </button>
+              <div class="w-full sm:w-auto">
+                <div class="flex flex-col sm:flex-row items-stretch gap-3">
+                  <!-- Select -->
+                  <div class="flex-1">
+                    <select
+                      #shipperSelect
+                      class="w-full h-11 px-4 border border-gray-300 rounded-lg 
+               bg-white text-sm shadow-sm
+               focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
+               transition"
+                    >
+                      <option value="">Chọn người nhận</option>
+                      @for (s of shippers(); track s.email) {
+                        <option [value]="s.email">{{ s.name }}</option>
+                      }
+                    </select>
+                  </div>
+
+                  <button
+                    (click)="assign(shipperSelect.value)"
+                    class="h-11 px-6 rounded-lg 
+             bg-blue-600 text-white text-sm font-semibold 
+             shadow-sm hover:bg-blue-700 
+             transition duration-200"
+                  >
+                    Điều phối
+                  </button>
+
+                  <button
+                    (click)="
+                      showRequestInput.set(false); showRequestInput.set(true)
+                    "
+                    class="h-11 px-6 rounded-lg 
+             border border-gray-300 bg-white 
+             text-gray-700 text-sm font-medium
+             shadow-sm hover:bg-gray-50 
+             transition duration-200"
+                  >
+                    Yêu cầu bổ sung
+                  </button>
+                </div>
               </div>
             }
 
             <!-- SHIPPER ACTIONS -->
             @if (isShipper()) {
-              @if (order().status === "Đã điều phối") {
+              @if (order().status === "ASSIGNED") {
                 <button
                   (click)="attemptAccept()"
                   class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm"
@@ -676,7 +700,7 @@ import { Attachment, DepartmentType, Order, OrderStatus } from "../../type/model
                   Từ chối
                 </button>
               }
-              @if (order().status === "Đang xử lý") {
+              @if (order().status === "PROCESSING") {
                 <button
                   (click)="openCompleteModal()"
                   class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm"
@@ -1022,9 +1046,9 @@ import { Attachment, DepartmentType, Order, OrderStatus } from "../../type/model
           <h2 class="font-bold text-lg mb-3">Check list hồ sơ</h2>
           <div class="ml-2 space-y-2">
             @for (
-              att of localAttachments().length
+              att of localAttachments()?.length
                 ? localAttachments()
-                : order().attachments || [];
+                : order()?.attachments || [];
               track att.name
             ) {
               <div class="flex items-center">
@@ -1034,7 +1058,7 @@ import { Attachment, DepartmentType, Order, OrderStatus } from "../../type/model
                 <span class="text-lg">- {{ att.name }} x {{ att.qty }}</span>
               </div>
             }
-            @if (!order().attachments.length) {
+            @if (!order()?.attachments?.length) {
               <p class="italic">(Không có hồ sơ đính kèm)</p>
             }
           </div>
@@ -1089,28 +1113,24 @@ export class OrderDetailComponent implements OnInit {
 
   currentUserRole = this.authService.userRole;
 
-  // ngOnInit() {
-  //   if (this.order().attachments) {
-  //     const cloned = this.order().attachments.map(a => ({ ...a }));
-  //     this.localAttachments.set(cloned);
-  //   }
-  // }
-
   ngOnInit() {
-    if (this.order().attachments) {
-      const cloned = this.order().attachments.map((a) => ({ ...a }));
+    if (this.order()?.attachments) {
+      const cloned = this.order().attachments.map((a) => ({
+        ...a,
+        checked: false,
+      }));
       this.localAttachments.set(cloned);
+    } else {
+      this.localAttachments.set([]);
     }
   }
-
-  // --- Checklist Logic ---
 
   isChecklistActive() {
     const status = this.order().status;
     return (
-      (status === "Đã điều phối" ||
-        status === "Chờ tiếp nhận" ||
-        status === "Bổ sung") &&
+      (status === "ASSIGNED" ||
+        status === "PENDING" ||
+        status === "SUPPLEMENT_REQUIRED") &&
       (this.currentUserRole() === "NVGN" || this.currentUserRole() === "QL")
     );
   }
@@ -1208,8 +1228,7 @@ export class OrderDetailComponent implements OnInit {
     if (this.currentUserRole() === "IT") return true;
     return (
       this.currentUserRole() === "NVADMIN" &&
-      (this.order().status === "Chờ tiếp nhận" ||
-        this.order().status === "Xử lý Xong")
+      (this.order().status === "PENDING" || this.order().status === "COMPLETED")
     );
   }
 
@@ -1218,8 +1237,8 @@ export class OrderDetailComponent implements OnInit {
     if (role === "IT" && !!this.order().requestNote) return true;
     return (
       role === "NVADMIN" &&
-      (this.order().status === "Chờ tiếp nhận" ||
-        this.order().status === "Bổ sung") &&
+      (this.order().status === "PENDING" ||
+        this.order().status === "SUPPLEMENT_REQUIRED") &&
       !!this.order().requestNote
     );
   }
@@ -1462,39 +1481,39 @@ export class OrderDetailComponent implements OnInit {
 
   getStatusLabel(status: OrderStatus): string {
     const map: Record<OrderStatus, string> = {
-      "Chờ tiếp nhận": "Chờ tiếp nhận",
-      "Đã điều phối": "Đã điều phối",
-      "Đang xử lý": "Đang thực hiện",
-      "Xử lý Xong": "Đã xong",
-      "Hoàn tất": "Hoàn tất",
-      "Từ chối nhận": "Đã từ chối",
-      "Bổ sung": "Cần bổ sung",
-      "Chưa hoàn thành": "Chưa hoàn thành",
+      PENDING: "Chờ tiếp nhận",
+      ASSIGNED: "Đã điều phối",
+      PROCESSING: "Đang thực hiện",
+      COMPLETED: "Đã xong",
+      FINISHED: "Hoàn tất",
+      REJECTED: "Đã từ chối",
+      SUPPLEMENT_REQUIRED: "Cần bổ sung",
+      INCOMPLETE: "Chưa hoàn thành",
     };
     return map[status] || status;
   }
 
   getStatusClass(status: OrderStatus): string {
     const map: Record<OrderStatus, string> = {
-      "Chờ tiếp nhận": "bg-red-100 text-red-800",
-      "Đã điều phối": "bg-blue-100 text-blue-800",
-      "Đang xử lý": "bg-yellow-100 text-yellow-800",
-      "Xử lý Xong": "bg-purple-100 text-purple-800",
-      "Hoàn tất": "bg-green-100 text-green-800",
-      "Từ chối nhận": "bg-gray-100 text-gray-800",
-      "Bổ sung": "bg-orange-100 text-orange-800",
-      "Chưa hoàn thành": "bg-red-50 text-red-600",
+      PENDING: "bg-red-100 text-red-800",
+      ASSIGNED: "bg-blue-100 text-blue-800",
+      PROCESSING: "bg-yellow-100 text-yellow-800",
+      COMPLETED: "bg-purple-100 text-purple-800",
+      FINISHED: "bg-green-100 text-green-800",
+      REJECTED: "bg-gray-100 text-gray-800",
+      SUPPLEMENT_REQUIRED: "bg-orange-100 text-orange-800",
+      INCOMPLETE: "bg-red-50 text-red-600",
     };
     return map[status] || "bg-gray-100 text-gray-800";
   }
 
-  getDeptColorClass(dept: DepartmentType): string {
+  getDeptColorClass(dept: string): string {
     switch (dept) {
-      case "Visa Việt Nam":
+      case "VISA_VN":
         return "bg-blue-500";
-      case "Visa Nước Ngoài":
+      case "VISA_FOREIGN":
         return "bg-purple-500";
-      case "Giấy Phép Lao Động":
+      case "WORK_PERMIT":
         return "bg-teal-500";
       default:
         return "bg-gray-400";

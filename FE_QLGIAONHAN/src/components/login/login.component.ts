@@ -3,6 +3,7 @@ import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { AuthService } from "../../services/auth.service";
 import { OrderService } from "../../services/order.service";
+import { Router } from '@angular/router';
 
 @Component({
   selector: "app-login",
@@ -104,6 +105,7 @@ export class LoginComponent {
 
   private authService = inject(AuthService);
   private orderService = inject(OrderService);
+  private router = inject(Router);
 
   onLogin() {
     if (!this.email || !this.password) {
@@ -116,6 +118,7 @@ export class LoginComponent {
         this.authService.setUser(res.user, res.token);
         this.orderService.loadOrders();
         this.errorMsg.set("");
+        this.router.navigate(['/dashboard']);
       },
       error: () => {
         this.errorMsg.set("Sai thông tin đăng nhập");

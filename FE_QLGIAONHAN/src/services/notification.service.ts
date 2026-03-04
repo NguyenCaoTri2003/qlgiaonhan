@@ -26,7 +26,6 @@ export class NotificationService {
     private authService: AuthService
   ) {}
 
-  // ================= LOAD =================
   loadNotifications() {
     this.http.get<Notification[]>(`${this.API}/notifications`)
       .subscribe({
@@ -35,7 +34,6 @@ export class NotificationService {
       });
   }
 
-  // ================= COMPUTED =================
   myNotifications = computed(() => {
     const user = this.authService.currentUser();
     if (!user) return [];
@@ -53,7 +51,6 @@ export class NotificationService {
     this.myNotifications().filter(n => n.read === 0).length
   );
 
-  // ================= MARK AS READ =================
   markAllAsRead() {
     this.http.put(`${this.API}/notifications/mark-all`, {})
       .subscribe({

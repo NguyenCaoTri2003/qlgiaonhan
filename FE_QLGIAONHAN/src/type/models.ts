@@ -1,6 +1,19 @@
-export type OrderStatus = 'Chờ tiếp nhận' | 'Đã điều phối' | 'Đang xử lý' | 'Bổ sung' | 'Từ chối nhận' | 'Xử lý Xong' | 'Hoàn tất' | 'Chưa hoàn thành';
+export type OrderStatus =
+  | "PENDING"
+  | "ASSIGNED"
+  | "PROCESSING"
+  | "SUPPLEMENT_REQUIRED"
+  | "REJECTED"
+  | "COMPLETED"
+  | "FINISHED"
+  | "INCOMPLETE";
 export type ViewState = 'DASHBOARD' | 'ORDERS' | 'LOGS' | 'USER_MANAGEMENT' | 'GUIDE';
-export type DepartmentType = 'Visa Việt Nam' | 'Visa Nước Ngoài' | 'Giấy Phép Lao Động';
+
+export interface DepartmentType {
+  id: number;
+  name: string;
+  code: string;
+}
 export type FilterType = 'ALL' | 'PENDING_GROUP' | 'DONE_GROUP' | 'SUPPLEMENT';
 
 export interface Attachment {
@@ -38,7 +51,7 @@ export interface Sender {
   phone: string;
 }
 
-export const DEPARTMENTS: DepartmentType[] = ['Visa Việt Nam', 'Visa Nước Ngoài', 'Giấy Phép Lao Động'];
+// export const DEPARTMENTS: DepartmentType[] = ['Visa Việt Nam', 'Visa Nước Ngoài', 'Giấy Phép Lao Động'];
 
 export interface CustomerData {
   phone: string;
@@ -55,7 +68,7 @@ export const SENDERS: Sender[] = [
 ];
 
 export interface Order {
-  id: string;
+  id: number;
   createDate: number;
   creator: string;
   receiver: string | null;

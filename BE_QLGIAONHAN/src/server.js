@@ -14,6 +14,8 @@ app.use("/api/notifications", verifyToken, require("./routes/notifications.route
 app.use("/api/customers", verifyToken, require("./routes/customers.routes"));
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/users", verifyToken, require("./routes/user.routes"));
+app.use("/api/departments", verifyToken, require("./routes/department.routes"));
+app.use("/api", require("./routes/sync.routes"));
 
 app.listen(process.env.PORT, () => {
   console.log("Server running at http://localhost:" + process.env.PORT);

@@ -8,5 +8,6 @@ router.get("/company/:company", customersController.getCustomerByCompany);
 router.post("/", customersController.createCustomer);
 router.put("/:id", customersController.updateCustomer);
 router.delete("/:id", customersController.deleteCustomer);
+router.post("/search-customers-nhigia", customersController.searchNhigiaCompanies);
 
 module.exports = router;

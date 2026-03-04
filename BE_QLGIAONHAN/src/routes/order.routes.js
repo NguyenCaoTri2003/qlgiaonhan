@@ -5,6 +5,8 @@ const ordersController = require("../controllers/order.controller");
 router.get("/", ordersController.getAllOrders);
 router.post("/", ordersController.createOrder);
 
+router.get("/:id", ordersController.getOrderDetail);
+
 router.post("/:id/reject", ordersController.rejectOrder);
 router.post("/:id/complete", ordersController.completeOrder);
 router.post("/:id/finalize", ordersController.adminFinalize);
