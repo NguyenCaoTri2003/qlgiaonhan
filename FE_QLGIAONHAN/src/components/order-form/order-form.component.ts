@@ -94,8 +94,11 @@ import { DepartmentService } from "../../services/department.service";
                 formControlName="department"
                 class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
               >
-                @for (dept of departments(); track dept) {
-                  <option [value]="dept">{{ dept }}</option>
+                <option value="">-- Chọn Bộ Phận --</option>
+                @for (dept of departments(); track dept.id) {
+                  <option [value]="dept.id">
+                    {{ dept.name }}
+                  </option>
                 }
               </select>
             </div>
@@ -427,7 +430,7 @@ import { DepartmentService } from "../../services/department.service";
 
             <div class="p-4 space-y-3">
               <div
-                *ngFor="let att of customAttachments; let i = index"
+                *ngFor="let att of customAttachments(); let i = index"
                 class="flex items-center gap-3 animate-fade-in group"
               >
                 <input
@@ -591,14 +594,16 @@ export class OrderFormComponent implements OnInit {
 
   private departmentService = inject(DepartmentService);
 
-  departments = computed(() =>
-    this.departmentService.departments().map((d) => d.name),
-  );
+  // departments = computed(() =>
+  //   this.departmentService.departments().map((d) => d.name),
+  // );
+
+  departments = this.departmentService.departments;
 
   private usersService = inject(UsersService);
   senders = signal<any[]>([]);
 
-  customAttachments: { name: string; qty: number; checked: boolean }[] = [];
+  // customAttachments: { name: string; qty: number; checked: boolean }[] = [];
   uploadedFileList = signal<{ name: string; type: string; data: string }[]>([]);
 
   selectedAttachments = signal<Map<string, number>>(new Map());
@@ -617,18 +622,15 @@ export class OrderFormComponent implements OnInit {
 
   googleMapLink = signal("");
 
+  customAttachments = signal<{ name: string; qty: number; checked: boolean }[]>(
+    [],
+  );
+
   ngOnInit() {
     const data = this.orderData();
 
     if (data && data.attachments) {
-      this.customAttachments = data.attachments.map((a) => ({ ...a }));
-    } else {
-      this.customAttachments = [
-        { name: "Hộ chiếu", qty: 1, checked: false },
-        { name: "Visa", qty: 1, checked: false },
-        { name: "Giấy phép lao động (GPLĐ)", qty: 1, checked: false },
-        { name: "Thẻ tạm trú", qty: 1, checked: false },
-      ];
+      this.customAttachments.set(data.attachments.map((a) => ({ ...a })));
     }
 
     if (data && data.uploadedFiles) {
@@ -640,10 +642,7 @@ export class OrderFormComponent implements OnInit {
     }
 
     this.form = this.fb.group({
-      department: [
-        data?.department?.name || "Visa Việt Nam",
-        Validators.required,
-      ],
+      department: [data?.department?.id || null, Validators.required],
       senderName: [data?.senderName || "", Validators.required],
       phone: [data?.phone || "", Validators.required],
       company: [data?.company || "", Validators.required],
@@ -678,8 +677,34 @@ export class OrderFormComponent implements OnInit {
 
     this.departmentService.loadDepartments();
 
-    
+    this.form.get("department")?.valueChanges.subscribe((deptId) => {
+      if (!deptId) return;
+
+      const dept = this.departments().find((d) => d.id == deptId);
+      if (!dept) return;
+
+      const externalId = dept.external_id;
+
+      this.departmentService
+        .getAttachmentsByDepartment(externalId)
+        .subscribe((res) => {
+          const mapped = res
+            .sort(
+              (a: any, b: any) =>
+                new Date(a.create_at).getTime() -
+                new Date(b.create_at).getTime(),
+            )
+            .map((item: any) => ({
+              name: item.name,
+              qty: 1,
+              checked: false,
+            }));
+
+          this.customAttachments.set(mapped);
+        });
+    });
   }
+
 
   loadCompanies() {
     if (!this.hasMore()) return;
@@ -790,21 +815,32 @@ export class OrderFormComponent implements OnInit {
   }
 
   addNewAttachment() {
-    this.customAttachments.push({ name: "", qty: 1, checked: false });
+    this.customAttachments.update((attachments) => [
+      ...attachments,
+      { name: "", qty: 1, checked: false },
+    ]);
   }
 
   toggleCustomAtt(index: number) {
-    this.customAttachments[index].checked =
-      !this.customAttachments[index].checked;
+    this.customAttachments.update((attachments) => {
+      const updated = [...attachments];
+      updated[index].checked = !updated[index].checked;
+      return updated;
+    });
   }
 
   updateCustomQty(index: number, delta: number) {
-    const newQty = Math.max(1, this.customAttachments[index].qty + delta);
-    this.customAttachments[index].qty = newQty;
+    this.customAttachments.update((attachments) => {
+      const updated = [...attachments];
+      updated[index].qty = Math.max(1, updated[index].qty + delta);
+      return updated;
+    });
   }
 
   removeCustomAtt(index: number) {
-    this.customAttachments.splice(index, 1);
+    this.customAttachments.update((attachments) =>
+      attachments.filter((_, i) => i !== index),
+    );
   }
 
   async onFilesUploaded(event: any) {
@@ -848,7 +884,7 @@ export class OrderFormComponent implements OnInit {
     if (this.form.valid) {
       const formVal = this.form.value;
 
-      const attachments: Attachment[] = this.customAttachments
+      const attachments: Attachment[] = this.customAttachments()
         .filter((a) => a.name.trim() !== "")
         .map((a) => ({ ...a, name: a.name.trim() }));
 

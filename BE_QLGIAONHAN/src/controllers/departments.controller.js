@@ -1,4 +1,5 @@
 const pool = require("../config/database");
+const nhigiaService = require("../services/nhigia.service");
 
 exports.getDepartment = async (req, res) => {
   try {
@@ -21,11 +22,39 @@ exports.getAttachmentsByDepartment = async (req, res) => {
 
     const mapped = data.map((item) => ({
       name: item.tenhoso,
-      code: item.mahoso,
-      required: item.batbuoc === 1,
+      create_at: item.ngaytao,
+      create_by: item.nguoitao,
+      id: item.id,
     }));
 
     res.json(mapped);
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.getVisaVNTypeByDepartment = async (req, res) => {
+  try {
+    const { departmentId, typeId } = req.params;
+
+    const data = await nhigiaService.fetchNhigiaVisaVNType(departmentId, typeId);
+
+    res.json(data);
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.getVisaVNTypeDetailsByDepartment = async (req, res) => {
+  try {
+    const { departmentId, typeId } = req.params;
+
+    const data = await nhigiaService.fetchNhigiaVisaVNTypeDetails(departmentId, typeId);
+
+    res.json(data);
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

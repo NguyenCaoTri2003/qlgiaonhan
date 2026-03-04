@@ -54,3 +54,45 @@ exports.fetchNhigiaAttachmentsByDepartment = async (departmentId) => {
     return [];
   }
 };
+
+exports.fetchNhigiaVisaVNType = async (departmentId, typeId) => {
+  try {
+    const response = await axios.post(
+      NHIGIA_API,
+      {
+        action: "get_loai_dich_vu_visavn",
+        idbophan: departmentId,
+        iddvvisavn: typeId,
+      },
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    return response.data?.data || [];
+  } catch (error) {
+    console.error("Fetch Nhị Gia Attachments Error:", error.message);
+    return [];
+  }
+};
+
+exports.fetchNhigiaVisaVNTypeDetails = async (departmentId, typeId) => {
+  try {
+    const response = await axios.post(
+      NHIGIA_API,
+      {
+        action: "get_loai_dich_vu_visavn",
+        idbophan: departmentId,
+        idloaihosovisavn: typeId,
+      },
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    return response.data?.data || [];
+  } catch (error) {
+    console.error("Fetch Nhị Gia Attachments Error:", error.message);
+    return [];
+  }
+};
