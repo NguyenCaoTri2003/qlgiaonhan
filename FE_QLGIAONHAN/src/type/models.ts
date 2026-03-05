@@ -111,4 +111,5 @@ export interface Order {
   sort_index: number;
   shipperHighlightColor?: 'red' | 'blue' | 'yellow' | null;
   updatedAt: number;
+  files?: { id: number; fileName: string; filePath: string, originalName: string }[];
 }

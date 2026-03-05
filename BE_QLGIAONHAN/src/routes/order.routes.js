@@ -16,7 +16,7 @@ router.delete("/:id", ordersController.deleteOrder);
 router.post("/:id/assign", ordersController.assignReceiver);
 router.post("/:id/accept", ordersController.shipperAccept);
 
-router.put("/:id", ordersController.updateOrder);
+router.put("/:id", upload.array("files"), ordersController.updateOrder);
 router.post("/sort", ordersController.updateOrderSort);
 router.post("/update-sort", ordersController.updateOrderSort);
 

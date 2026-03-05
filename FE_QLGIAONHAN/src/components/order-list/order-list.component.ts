@@ -511,7 +511,6 @@ import { OrderFormComponent } from "../order-form/order-form.component";
           <div class="w-full max-w-4xl" (click)="$event.stopPropagation()">
             <app-order-form
               [orderData]="editingOrder()"
-              (save)="saveOrder($event)"
               (cancel)="closeForm()"
             />
           </div>
@@ -774,16 +773,17 @@ export class OrderListComponent {
   closeForm() {
     this.showCreateForm.set(false);
     this.editingOrder.set(null);
+    this.load();
   }
 
-  saveOrder(data: Partial<Order>) {
-    if (this.editingOrder()) {
-      this.orderService.updateOrder(this.editingOrder()!.id, data);
-    } else {
-      this.orderService.addOrder(data);
-    }
-    this.closeForm();
-  }
+  // saveOrder(data: Partial<Order>) {
+  //   if (this.editingOrder()) {
+  //     this.orderService.updateOrder(this.editingOrder()!.id, data);
+  //   } else {
+  //     this.orderService.addOrder(data);
+  //   }
+  //   this.closeForm();
+  // }
 
   // Mock data for dropdowns
   provinces = ["TP.HCM", "Hà Nội", "Đà Nẵng", "Long An", "Bình Dương"];

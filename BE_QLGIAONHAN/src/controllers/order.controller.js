@@ -1,5 +1,7 @@
 const { v4: uuidv4 } = require("uuid");
 const pool = require("../config/database");
+const fs = require("fs");
+const path = require("path");
 
 exports.getAllOrders = async (req, res) => {
   try {
@@ -224,7 +226,7 @@ exports.createOrder = async (req, res) => {
             item.checked ? 1 : 0,
             body.department_id ?? null,
             body.external_department_id ?? null,
-            item.external_profile_id  ?? null,
+            item.external_profile_id ?? null,
             item.external_visa_type_id ?? null,
             item.external_visa_detail_id ?? null,
           ],
@@ -242,7 +244,6 @@ exports.createOrder = async (req, res) => {
           `
       INSERT INTO nhigia_logistics_files
       (
-        id,
         order_id,
         file_name,
         file_path,
@@ -250,10 +251,9 @@ exports.createOrder = async (req, res) => {
         file_size,
         created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, NOW())
+      VALUES (?, ?, ?, ?, ?, NOW())
       `,
           [
-            uuidv4(),
             orderId,
             file.originalname,
             relativePath,
@@ -298,51 +298,179 @@ exports.createOrder = async (req, res) => {
   }
 };
 
-// exports.createOrder = async (req, res) => {
-//   try {
-//     const user = req.user;
-//     const now = Date.now();
+exports.updateOrder = async (req, res) => {
+  const connection = await pool.getConnection();
 
-//     const [result] = await pool.query(
-//       `INSERT INTO nhigia_logistics_orders
-//        (create_date, creator, department, sender_name, sender_phone,
-//         company, address, phone, status, status_update_date)
-//        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-//       [
-//         now,
-//         user.email,
-//         req.body.department,
-//         req.body.sender_name,
-//         req.body.sender_phone,
-//         req.body.company,
-//         req.body.address,
-//         req.body.phone,
-//         "PENDING",
-//         now,
-//       ]
-//     );
+  try {
+    await connection.beginTransaction();
 
-//     const orderId = result.insertId;
+    const orderId = req.params.id;
+    const body = JSON.parse(req.body.data);
+    const replaceFiles = req.body.replace_files === "1";
+    const files = req.files;
+    const now = Date.now();
 
-//     await pool.query(
-//       `INSERT INTO nhigia_logistics_logs
-//        (timestamp, user_email, user_name, action, order_id, details)
-//        VALUES (?, ?, ?, ?, ?, ?)`,
-//       [now, user.email, user.name, "CREATE", orderId, "Tạo đơn mới"]
-//     );
+    await connection.query(
+      `
+      UPDATE nhigia_logistics_orders SET
+        receiver = ?,
+        receiver_name = ?,
+        department_id = ?,
+        sender_name = ?,
+        sender_phone = ?,
+        time = ?,
+        date = ?,
+        company = ?,
+        address = ?,
+        address_line = ?,
+        ward = ?,
+        district = ?,
+        province = ?,
+        contact = ?,
+        phone = ?,
+        purpose = ?,
+        notes = ?,
+        amount_vnd = ?,
+        amount_usd = ?,
+        missing_docs = ?,
+        priority = ?,
+        updated_at = NOW()
+      WHERE id = ?
+      `,
+      [
+        body.receiver ?? null,
+        body.receiver_name ?? null,
+        body.department_id ?? null,
+        body.sender_name ?? null,
+        body.sender_phone ?? null,
+        body.time ?? null,
+        body.date ?? null,
+        body.company ?? null,
+        body.address ?? null,
+        body.address_line ?? null,
+        body.ward ?? null,
+        body.district ?? null,
+        body.province ?? null,
+        body.contact ?? null,
+        body.phone ?? null,
+        body.purpose ?? null,
+        body.notes ?? null,
+        body.amount_vnd ?? 0,
+        body.amount_usd ?? 0,
+        body.missing_docs ?? null,
+        body.priority ?? "normal",
+        orderId,
+      ],
+    );
 
-//     await pool.query(
-//       `INSERT INTO nhigia_logistics_notifications
-//        (timestamp, message, read_status, target_role)
-//        VALUES (?, ?, 0, ?)`,
-//       [now, `Đơn ${orderId} cần điều phối`, "QL"]
-//     );
+    await connection.query(
+      `DELETE FROM nhigia_logistics_attachments WHERE order_id = ?`,
+      [orderId],
+    );
 
-//     res.json({ message: "Created", id: orderId });
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// };
+    if (Array.isArray(body.attachments)) {
+      for (const item of body.attachments) {
+        await connection.query(
+          `
+          INSERT INTO nhigia_logistics_attachments
+          (
+            order_id,
+            name,
+            qty,
+            checked,
+            department_id,
+            external_department_id,
+            external_profile_id,
+            external_visa_type_id,
+            external_visa_detail_id
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            orderId,
+            item.name ?? null,
+            item.qty ?? 1,
+            item.checked ? 1 : 0,
+            body.department_id ?? null,
+            body.external_department_id ?? null,
+            item.external_profile_id ?? null,
+            item.external_visa_type_id ?? null,
+            item.external_visa_detail_id ?? null,
+          ],
+        );
+      }
+    }
+
+    if (replaceFiles) {
+      const [oldFiles] = await connection.query(
+        `SELECT * FROM nhigia_logistics_files WHERE order_id = ?`,
+        [orderId],
+      );
+
+      await connection.query(
+        `DELETE FROM nhigia_logistics_files WHERE order_id = ?`,
+        [orderId],
+      );
+
+      for (const file of oldFiles) {
+        const filePath = path.join(__dirname, "..", "uploads", file.file_path);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+
+      if (files && files.length > 0) {
+        for (const file of files) {
+          const relativePath = file.path
+            .split("uploads\\")[1]
+            .replace(/\\/g, "/");
+
+          await connection.query(
+            `
+        INSERT INTO nhigia_logistics_files
+        (
+          order_id,
+          original_name,
+          file_name,
+          file_path,
+          file_type,
+          file_size,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, NOW())
+        `,
+            [
+              orderId,
+              file.originalname,
+              file.filename,
+              relativePath,
+              file.mimetype,
+              file.size,
+            ],
+          );
+        }
+      }
+    }
+
+    await connection.query(
+      `
+      INSERT INTO nhigia_logistics_logs
+      (timestamp, action, order_id, details)
+      VALUES (?, ?, ?, ?)
+      `,
+      [now, "UPDATE", orderId, "Cập nhật đơn"],
+    );
+
+    await connection.commit();
+
+    res.json({ message: "Updated successfully" });
+  } catch (err) {
+    await connection.rollback();
+    res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
+  }
+};
 
 exports.rejectOrder = async (req, res) => {
   const orderId = req.params.id;
@@ -365,18 +493,6 @@ exports.rejectOrder = async (req, res) => {
     );
 
     res.json({ message: "Rejected successfully" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
-exports.updateOrder = async (req, res) => {
-  try {
-    await pool.query(`UPDATE nhigia_logistics_orders SET ? WHERE id = ?`, [
-      req.body,
-      req.params.id,
-    ]);
-    res.json({ message: "Updated" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

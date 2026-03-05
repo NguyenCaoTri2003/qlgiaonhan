@@ -2,7 +2,6 @@ import { Injectable, signal, computed, inject, effect } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { AuthService } from "./auth.service";
 import { Order, LocationData, FilterType } from "../type/models";
-import { tap } from "rxjs";
 
 @Injectable({ providedIn: "root" })
 export class OrderService {
@@ -71,20 +70,12 @@ export class OrderService {
     );
   }
 
-  updateOrder(id: number, formData: FormData) {
-    return this.http.put(`${this.API}/orders/${id}`, formData);
+  addOrder(order: any) {
+    return this.http.post(`${this.API}/orders`, order);
   }
 
-  // addOrder(order: any) {
-  //   return this.http.post(`${this.API}/orders`, order);
-  // }
-
-  addOrder(order: any) {
-    return this.http.post(`${this.API}/orders`, order).pipe(
-      tap(() => {
-        this.refreshOrders(); // load lại list
-      }),
-    );
+  updateOrder(id: number, updates: any) {
+    return this.http.put(`${this.API}/orders/${id}`, updates);
   }
 
   assignReceiver(id: number, email: string, name: string) {

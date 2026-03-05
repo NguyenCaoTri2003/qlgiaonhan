@@ -760,6 +760,10 @@ export class OrderFormComponent implements OnInit {
             this.customAttachments.set(mapped);
           });
       }
+
+      if (data?.files) {
+        this.existingFiles.set([...data.files]);
+      }
     });
 
     //
@@ -962,12 +966,13 @@ export class OrderFormComponent implements OnInit {
   }
 
   onFilesUploaded(event: any) {
-    const files = event.target.files as FileList;
-    if (!files) return;
+    const input = event.target as HTMLInputElement;
+    if (!input.files) return;
 
-    const newFiles = Array.from(files);
-
+    const newFiles = Array.from(input.files);
     this.uploadedFileList.update((list) => [...list, ...newFiles]);
+
+    input.value = "";
   }
 
   removeUploadedFile(index: number) {
@@ -984,6 +989,12 @@ export class OrderFormComponent implements OnInit {
       const formatted = this.formatNumber(parseInt(val));
       this.form.get(controlName)?.setValue(formatted, { emitEvent: false });
     }
+  }
+
+  existingFiles = signal<any[]>([]);
+
+  removeExistingFile(index: number) {
+    this.existingFiles.update((list) => list.filter((_, i) => i !== index));
   }
 
   onSubmit() {
@@ -1041,18 +1052,37 @@ export class OrderFormComponent implements OnInit {
 
     formData.append("data", JSON.stringify(payload));
 
-    this.uploadedFileList().forEach((file: File) => {
-      formData.append("files", file);
-    });
+    const hasNewFiles = this.uploadedFileList().length > 0;
 
-    this.orderService.addOrder(formData).subscribe({
-      next: (res) => {
-        console.log("BE trả về:", res);
-        this.cancel.emit();
-      },
-      error: (err) => {
-        console.error("Lỗi:", err);
-      },
-    });
+    formData.append(
+      "keep_file_ids",
+      JSON.stringify(this.existingFiles().map((f) => f.id)),
+    );
+
+    if (hasNewFiles) {
+      this.uploadedFileList().forEach((file: File) => {
+        formData.append("files", file);
+      });
+    }
+
+    if (this.isEditMode()) {
+      const id = this.orderData()?.id;
+
+      if (!id) return;
+
+      this.orderService.updateOrder(id, formData).subscribe({
+        next: () => {
+          this.cancel.emit();
+        },
+        error: (err) => console.error(err),
+      });
+    } else {
+      this.orderService.addOrder(formData).subscribe({
+        next: () => {
+          this.cancel.emit();
+        },
+        error: (err) => console.error(err),
+      });
+    }
   }
 }
