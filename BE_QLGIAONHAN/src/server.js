@@ -5,6 +5,7 @@ const cors = require("cors");
 const app = express();
 app.use(cors());
 app.use(express.json());
+const path = require("path");
 
 const { verifyToken } = require("./middleware/authMiddleware");
 
@@ -16,6 +17,8 @@ app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/users", verifyToken, require("./routes/user.routes"));
 app.use("/api/departments", verifyToken, require("./routes/department.routes"));
 app.use("/api", require("./routes/sync.routes"));
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.listen(process.env.PORT, () => {
   console.log("Server running at http://localhost:" + process.env.PORT);

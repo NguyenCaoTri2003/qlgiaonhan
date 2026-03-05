@@ -2,6 +2,7 @@ import { Injectable, signal, computed, inject, effect } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { AuthService } from "./auth.service";
 import { Order, LocationData, FilterType } from "../type/models";
+import { tap } from "rxjs";
 
 @Injectable({ providedIn: "root" })
 export class OrderService {
@@ -17,10 +18,6 @@ export class OrderService {
   private _totalPages = signal<number>(0);
   totalPages = this._totalPages.asReadonly();
 
-  // constructor() {
-  //   this.loadOrders();
-  // }
-
   constructor() {
     effect(
       () => {
@@ -32,7 +29,7 @@ export class OrderService {
           this._orders.set([]);
         }
       },
-      { allowSignalWrites: true }, // 👈 QUAN TRỌNG
+      { allowSignalWrites: true },
     );
   }
 
@@ -43,13 +40,6 @@ export class OrderService {
   clearOrders() {
     this._orders.set([]);
   }
-
-  // loadOrders() {
-  //   this.http.get<Order[]>(`${this.API}/orders`).subscribe({
-  //     next: (data) => this._orders.set(data),
-  //     error: (err) => console.error("Load orders error:", err),
-  //   });
-  // }
 
   loadOrders(page: number = 1, limit: number = 20) {
     this.http
@@ -67,11 +57,34 @@ export class OrderService {
     return this.http.get<Order>(`${this.API}/orders/${id}`);
   }
 
-  addOrder(order: Partial<Order>) {
-    this.http.post(`${this.API}/orders`, order).subscribe({
-      next: () => this.refreshOrders(),
-      error: (err) => console.error("Add order error:", err),
-    });
+  // addOrder(order: Partial<Order>) {
+  //   this.http.post(`${this.API}/orders`, order).subscribe({
+  //     next: () => this.refreshOrders(),
+  //     error: (err) => console.error("Add order error:", err),
+  //   });
+  // }
+
+  createOrder(order: Partial<Order>) {
+    return this.http.post<{ message: string; id: number }>(
+      `${this.API}/orders`,
+      order,
+    );
+  }
+
+  updateOrder(id: number, formData: FormData) {
+    return this.http.put(`${this.API}/orders/${id}`, formData);
+  }
+
+  // addOrder(order: any) {
+  //   return this.http.post(`${this.API}/orders`, order);
+  // }
+
+  addOrder(order: any) {
+    return this.http.post(`${this.API}/orders`, order).pipe(
+      tap(() => {
+        this.refreshOrders(); // load lại list
+      }),
+    );
   }
 
   assignReceiver(id: number, email: string, name: string) {
@@ -187,12 +200,12 @@ export class OrderService {
       });
   }
 
-  updateOrder(id: number, updates: Partial<Order>) {
-    this.http.put(`${this.API}/orders/${id}`, updates).subscribe({
-      next: () => this.refreshOrders(),
-      error: (err) => console.error("Update order error:", err),
-    });
-  }
+  // updateOrder(id: number, updates: Partial<Order>) {
+  //   this.http.put(`${this.API}/orders/${id}`, updates).subscribe({
+  //     next: () => this.refreshOrders(),
+  //     error: (err) => console.error("Update order error:", err),
+  //   });
+  // }
 
   updateOrderSort(userId: string, orderIds: string[]) {
     this.http

@@ -110,4 +110,5 @@ export interface Order {
   priority: 'high' | 'medium' | 'normal' | 'low';
   sort_index: number;
   shipperHighlightColor?: 'red' | 'blue' | 'yellow' | null;
+  updatedAt: number;
 }

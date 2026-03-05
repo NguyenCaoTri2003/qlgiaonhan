@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const ordersController = require("../controllers/order.controller");
+const upload = require("../middleware/upload");
 
 router.get("/", ordersController.getAllOrders);
-router.post("/", ordersController.createOrder);
+router.post("/", upload.array("files"), ordersController.createOrder);
 
 router.get("/:id", ordersController.getOrderDetail);
 

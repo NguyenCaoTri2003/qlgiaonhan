@@ -8,6 +8,7 @@ import {
   signal,
   HostListener,
   effect,
+  ElementRef,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import {
@@ -21,6 +22,7 @@ import { Attachment, Order, SENDERS } from "../../type/models";
 import { CustomerService } from "../../services/customer.service";
 import { UsersService } from "../../services/users.service";
 import { DepartmentService } from "../../services/department.service";
+import { OrderService } from "../../services/order.service";
 
 @Component({
   selector: "app-order-form",
@@ -622,13 +624,14 @@ export class OrderFormComponent implements OnInit {
   customers = this.customerService.customers;
 
   private departmentService = inject(DepartmentService);
-
   departments = this.departmentService.departments;
 
   private usersService = inject(UsersService);
   senders = signal<any[]>([]);
 
-  uploadedFileList = signal<{ name: string; type: string; data: string }[]>([]);
+  private orderService = inject(OrderService);
+
+  uploadedFileList = signal<File[]>([]);
 
   selectedAttachments = signal<Map<string, number>>(new Map());
   isAutofilled = signal(false);
@@ -665,6 +668,8 @@ export class OrderFormComponent implements OnInit {
   isVisaVN = signal(false);
   googleMapLink = signal("");
 
+  private el = inject(ElementRef);
+
   customAttachments = signal<{ name: string; qty: number; checked: boolean }[]>(
     [],
   );
@@ -677,7 +682,7 @@ export class OrderFormComponent implements OnInit {
     }
 
     if (data && data.uploadedFiles) {
-      this.uploadedFileList.set([...data.uploadedFiles]);
+      this.uploadedFileList.set([...(data.uploadedFiles as any)]);
     }
 
     if (data && data.senderPhone) {
@@ -720,34 +725,6 @@ export class OrderFormComponent implements OnInit {
 
     this.departmentService.loadDepartments();
 
-    // this.form.get("department")?.valueChanges.subscribe((deptId) => {
-
-    //   if (!deptId) return;
-
-    //   const dept = this.departments().find((d) => d.id == deptId);
-    //   if (!dept) return;
-
-    //   const externalId = dept.external_id;
-
-    //   this.departmentService
-    //     .getAttachmentsByDepartment(externalId)
-    //     .subscribe((res) => {
-    //       const mapped = res
-    //         .sort(
-    //           (a: any, b: any) =>
-    //             new Date(a.create_at).getTime() -
-    //             new Date(b.create_at).getTime(),
-    //         )
-    //         .map((item: any) => ({
-    //           name: item.name,
-    //           qty: 1,
-    //           checked: false,
-    //         }));
-
-    //       this.customAttachments.set(mapped);
-    //     });
-    // });
-
     this.form.get("department")?.valueChanges.subscribe((deptId) => {
       if (!deptId) return;
 
@@ -777,6 +754,7 @@ export class OrderFormComponent implements OnInit {
               name: item.name,
               qty: 1,
               checked: false,
+              external_profile_id: item.id ?? null,
             }));
 
             this.customAttachments.set(mapped);
@@ -832,7 +810,6 @@ export class OrderFormComponent implements OnInit {
       this.departmentService
         .getVisaVNTypeDetailsByDepartment(externalId, typeId, detailId)
         .subscribe((res) => {
-
           const mapped = res
             .sort((a: any, b: any) => a.displayOrder - b.displayOrder)
             .map((item: any) => ({
@@ -984,25 +961,13 @@ export class OrderFormComponent implements OnInit {
     );
   }
 
-  async onFilesUploaded(event: any) {
+  onFilesUploaded(event: any) {
     const files = event.target.files as FileList;
     if (!files) return;
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const reader = new FileReader();
-      reader.onload = (e: any) => {
-        this.uploadedFileList.update((list) => [
-          ...list,
-          {
-            name: file.name,
-            type: file.type || "application/octet-stream",
-            data: e.target.result,
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
-    }
+    const newFiles = Array.from(files);
+
+    this.uploadedFileList.update((list) => [...list, ...newFiles]);
   }
 
   removeUploadedFile(index: number) {
@@ -1022,27 +987,72 @@ export class OrderFormComponent implements OnInit {
   }
 
   onSubmit() {
-    if (this.form.valid) {
-      const formVal = this.form.value;
+    if (this.form.invalid) return;
 
-      const attachments: Attachment[] = this.customAttachments()
-        .filter((a) => a.name.trim() !== "")
-        .map((a) => ({ ...a, name: a.name.trim() }));
+    const formVal = this.form.value;
 
-      const payload: Partial<Order> = {
-        ...formVal,
-        amountVND: formVal.amountVND
-          ? parseInt(formVal.amountVND.replace(/,/g, ""))
-          : 0,
-        amountUSD: formVal.amountUSD
-          ? parseInt(formVal.amountUSD.replace(/,/g, ""))
-          : 0,
-        senderPhone: this.selectedSenderPhone(),
-        attachments,
-        uploadedFiles: this.uploadedFileList(),
-      };
+    const dept = this.departments().find(
+      (d: any) => d.id == formVal.department,
+    );
 
-      this.save.emit(payload);
-    }
+    const attachments = this.customAttachments()
+      .filter((a) => a.name.trim() !== "")
+      .map((a: any) => ({
+        name: a.name.trim(),
+        qty: a.qty ?? 1,
+        checked: a.checked ? 1 : 0,
+        external_profile_id: a.external_profile_id ?? null,
+        external_visa_type_id: formVal.visaType1 ?? null,
+        external_visa_detail_id: formVal.visaType2 ?? null,
+      }));
+
+    console.log("FORM VALUE:", formVal);
+    console.log("ATTACHMENTS:", attachments);
+
+    const payload = {
+      department_id: formVal.department,
+      external_department_id: dept?.external_id ?? null,
+
+      external_visa_type_id: formVal.visaType1 ?? null,
+      external_visa_detail_id: formVal.visaType2 ?? null,
+      sender_name: formVal.senderName,
+      sender_phone: this.selectedSenderPhone(),
+      company: formVal.company,
+      address: formVal.addressLine,
+      address_line: formVal.addressLine,
+      contact: formVal.contact,
+      phone: formVal.phone,
+      time: formVal.time,
+      date: formVal.date,
+      purpose: formVal.purpose,
+      notes: formVal.notes,
+      amount_vnd: formVal.amountVND
+        ? parseInt(formVal.amountVND.replace(/,/g, ""))
+        : 0,
+      amount_usd: formVal.amountUSD
+        ? parseInt(formVal.amountUSD.replace(/,/g, ""))
+        : 0,
+      attachments,
+    };
+
+    console.log("Dữ liệu gửi đi:", payload);
+
+    const formData = new FormData();
+
+    formData.append("data", JSON.stringify(payload));
+
+    this.uploadedFileList().forEach((file: File) => {
+      formData.append("files", file);
+    });
+
+    this.orderService.addOrder(formData).subscribe({
+      next: (res) => {
+        console.log("BE trả về:", res);
+        this.cancel.emit();
+      },
+      error: (err) => {
+        console.error("Lỗi:", err);
+      },
+    });
   }
 }
