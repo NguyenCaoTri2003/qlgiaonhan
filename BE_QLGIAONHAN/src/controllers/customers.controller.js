@@ -114,10 +114,11 @@ exports.searchNhigiaCompanies = async (req, res) => {
 
     const formatted = rawList.map((item) => ({
       id: Number(item.id),
-      company_name: item.data?.tenctyhd || "",
+      company_name: item.data?.tenctyhd || item.data?.tenkh || item?.text || "",
       address:
         item.data?.diachi ||
         item.data?.diadiemlamviec ||
+        item?.diadiemlamviec ||
         item.data?.diachixuathoadon ||
         "",
       contact:

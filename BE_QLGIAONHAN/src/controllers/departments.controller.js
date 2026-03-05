@@ -38,10 +38,35 @@ exports.getVisaVNTypeByDepartment = async (req, res) => {
   try {
     const { departmentId, typeId } = req.params;
 
-    const data = await nhigiaService.fetchNhigiaVisaVNType(departmentId, typeId);
+    const data = await nhigiaService.fetchNhigiaVisaVNType(
+      departmentId,
+      typeId
+    );
 
-    res.json(data);
+    const mapped = data.map((item) => ({
+      id: item.id,
+      departmentId: item.idbopan,
+      requestId: item.idyeucau,
 
+      name: item.ten,
+      departmentName: item.tenbophan,
+
+      headerTitle: item.tieudeheader,
+      note: item.luuy,
+      description: item.ghichu,
+
+      order: item.thutu,
+      displayOrder: item.stt,
+
+      visible: item.hienthi === 1,
+
+      createAt: item.ngaytao,
+      createBy: item.nguoitao,
+      updateAt: item.ngaysua,
+      updateBy: item.nguoisua,
+    }));
+
+    res.json(mapped);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -49,12 +74,33 @@ exports.getVisaVNTypeByDepartment = async (req, res) => {
 
 exports.getVisaVNTypeDetailsByDepartment = async (req, res) => {
   try {
-    const { departmentId, typeId } = req.params;
+    const { departmentId, typeId, detailId } = req.params;
 
-    const data = await nhigiaService.fetchNhigiaVisaVNTypeDetails(departmentId, typeId);
+    const data = await nhigiaService.fetchNhigiaVisaVNTypeDetails(
+      departmentId,
+      typeId,
+      detailId
+    );
 
-    res.json(data);
+    const mapped = data.map((item) => ({
+      id: item.id,
+      departmentId: item.idbopan,
+      requestId: item.idyeucau,
 
+      departmentName: item.tenbophan,
+      name: item.tenhoso,
+      typeName: item.tenloaihsvsvn,
+      typyId: item.id_loaihosovsvn,
+
+      quantity: item.soluong,
+
+      description: item.ghichu,
+
+      order: item.thutu,
+      displayOrder: item.stt,
+    }));
+
+    res.json(mapped);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

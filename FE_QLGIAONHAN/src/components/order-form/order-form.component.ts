@@ -7,6 +7,7 @@ import {
   output,
   signal,
   HostListener,
+  effect,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import {
@@ -94,7 +95,6 @@ import { DepartmentService } from "../../services/department.service";
                 formControlName="department"
                 class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
               >
-                <option value="">-- Chọn Bộ Phận --</option>
                 @for (dept of departments(); track dept.id) {
                   <option [value]="dept.id">
                     {{ dept.name }}
@@ -351,6 +351,38 @@ import { DepartmentService } from "../../services/department.service";
             </div>
           </div>
 
+          @if (isVisaVN()) {
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- CẤP 1 -->
+              <div>
+                <label class="block text-sm font-bold mb-1">Loại Visa</label>
+                <select
+                  formControlName="visaType1"
+                  class="w-full border rounded-md py-2 px-3 bg-white"
+                >
+                  <option [ngValue]="null">-- Chọn loại --</option>
+                  @for (v of visaLevel1(); track v.id) {
+                    <option [value]="v.id">{{ v.name }}</option>
+                  }
+                </select>
+              </div>
+
+              <!-- CẤP 2 -->
+              <div>
+                <label class="block text-sm font-bold mb-1">Chi tiết</label>
+                <select
+                  formControlName="visaType2"
+                  class="w-full border rounded-md py-2 px-3 bg-white"
+                >
+                  <option [ngValue]="null">-- Chọn chi tiết --</option>
+                  @for (v of visaLevel2(); track v.id) {
+                    <option [value]="v.id">{{ v.name }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+          }
+
           <!-- New Attachments UI -->
           <div class="bg-white border rounded-lg overflow-hidden">
             <div
@@ -589,21 +621,13 @@ export class OrderFormComponent implements OnInit {
   form!: FormGroup;
   customers = this.customerService.customers;
 
-  // departments = DEPARTMENTS;
-  // senders = SENDERS;
-
   private departmentService = inject(DepartmentService);
-
-  // departments = computed(() =>
-  //   this.departmentService.departments().map((d) => d.name),
-  // );
 
   departments = this.departmentService.departments;
 
   private usersService = inject(UsersService);
   senders = signal<any[]>([]);
 
-  // customAttachments: { name: string; qty: number; checked: boolean }[] = [];
   uploadedFileList = signal<{ name: string; type: string; data: string }[]>([]);
 
   selectedAttachments = signal<Map<string, number>>(new Map());
@@ -612,6 +636,23 @@ export class OrderFormComponent implements OnInit {
 
   isEditMode = computed(() => !!this.orderData());
 
+  private defaultDepartmentEffect = effect(() => {
+    const list = this.departments();
+    const isEdit = this.isEditMode();
+
+    if (!this.form || isEdit) return;
+
+    if (list?.length && !this.form.get("department")?.value) {
+      const defaultDept = list.find((d: any) => Number(d.is_default) === 1);
+
+      if (defaultDept) {
+        this.form.patchValue({
+          department: defaultDept.id,
+        });
+      }
+    }
+  });
+
   companies = signal<any[]>([]);
   showDropdown = signal(false);
   isLoading = signal(false);
@@ -619,7 +660,9 @@ export class OrderFormComponent implements OnInit {
   hasMore = signal(true);
   currentKeyword = signal("");
   isSelectedFromDropdown = signal(false);
-
+  visaLevel1 = signal<any[]>([]);
+  visaLevel2 = signal<any[]>([]);
+  isVisaVN = signal(false);
   googleMapLink = signal("");
 
   customAttachments = signal<{ name: string; qty: number; checked: boolean }[]>(
@@ -677,26 +720,125 @@ export class OrderFormComponent implements OnInit {
 
     this.departmentService.loadDepartments();
 
+    // this.form.get("department")?.valueChanges.subscribe((deptId) => {
+
+    //   if (!deptId) return;
+
+    //   const dept = this.departments().find((d) => d.id == deptId);
+    //   if (!dept) return;
+
+    //   const externalId = dept.external_id;
+
+    //   this.departmentService
+    //     .getAttachmentsByDepartment(externalId)
+    //     .subscribe((res) => {
+    //       const mapped = res
+    //         .sort(
+    //           (a: any, b: any) =>
+    //             new Date(a.create_at).getTime() -
+    //             new Date(b.create_at).getTime(),
+    //         )
+    //         .map((item: any) => ({
+    //           name: item.name,
+    //           qty: 1,
+    //           checked: false,
+    //         }));
+
+    //       this.customAttachments.set(mapped);
+    //     });
+    // });
+
     this.form.get("department")?.valueChanges.subscribe((deptId) => {
       if (!deptId) return;
 
       const dept = this.departments().find((d) => d.id == deptId);
       if (!dept) return;
 
-      const externalId = dept.external_id;
+      // reset
+      this.visaLevel1.set([]);
+      this.visaLevel2.set([]);
+      this.customAttachments.set([]);
 
-      this.departmentService
-        .getAttachmentsByDepartment(externalId)
-        .subscribe((res) => {
-          const mapped = res
-            .sort(
-              (a: any, b: any) =>
-                new Date(a.create_at).getTime() -
-                new Date(b.create_at).getTime(),
-            )
-            .map((item: any) => ({
+      if (dept.code === "VISA_VN") {
+        this.isVisaVN.set(true);
+
+        this.departmentService
+          .getAttachmentsByDepartment(dept.external_id)
+          .subscribe((res) => {
+            this.visaLevel1.set(res);
+          });
+      } else {
+        this.isVisaVN.set(false);
+
+        this.departmentService
+          .getAttachmentsByDepartment(dept.external_id)
+          .subscribe((res) => {
+            const mapped = res.map((item: any) => ({
               name: item.name,
               qty: 1,
+              checked: false,
+            }));
+
+            this.customAttachments.set(mapped);
+          });
+      }
+    });
+
+    //
+    this.form.addControl("visaType1", this.fb.control(null));
+    this.form.addControl(
+      "visaType2",
+      this.fb.control({ value: null, disabled: true }),
+    );
+
+    this.form.get("visaType1")?.valueChanges.subscribe((typeId) => {
+      if (!typeId) {
+        this.form.get("visaType2")?.reset();
+        this.form.get("visaType2")?.disable();
+        return;
+      }
+
+      const dept = this.departments().find(
+        (d) => d.id == this.form.get("department")?.value,
+      );
+
+      const externalId = dept?.external_id;
+
+      this.visaLevel2.set([]);
+      this.customAttachments.set([]);
+
+      this.departmentService
+        .getVisaVNTypeByDepartment(externalId, typeId)
+        .subscribe((res) => {
+          this.visaLevel2.set(res);
+
+          if (res.length > 0) {
+            this.form.get("visaType2")?.enable();
+          }
+        });
+    });
+
+    //
+    this.form.get("visaType2")?.valueChanges.subscribe((detailId) => {
+      if (!detailId) return;
+
+      const dept = this.departments().find(
+        (d) => d.id == this.form.get("department")?.value,
+      );
+
+      const externalId = dept?.external_id;
+      const typeId = this.form.get("visaType1")?.value;
+
+      this.departmentService
+        .getVisaVNTypeDetailsByDepartment(externalId, typeId, detailId)
+        .subscribe((res) => {
+
+          const mapped = res
+            .sort((a: any, b: any) => a.displayOrder - b.displayOrder)
+            .map((item: any) => ({
+              id: item.id,
+              name: item.name,
+              qty: item.quantity ?? 1,
               checked: false,
             }));
 
@@ -704,7 +846,6 @@ export class OrderFormComponent implements OnInit {
         });
     });
   }
-
 
   loadCompanies() {
     if (!this.hasMore()) return;

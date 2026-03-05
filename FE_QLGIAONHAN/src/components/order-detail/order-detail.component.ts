@@ -1234,12 +1234,12 @@ export class OrderDetailComponent implements OnInit {
 
   canResolve() {
     const role = this.currentUserRole();
-    if (role === "IT" && !!this.order().requestNote) return true;
+    if (role === "IT" && !!this.order().supplementNote) return true;
     return (
       role === "NVADMIN" &&
       (this.order().status === "PENDING" ||
         this.order().status === "SUPPLEMENT_REQUIRED") &&
-      !!this.order().requestNote
+      !!this.order().supplementNote
     );
   }
 

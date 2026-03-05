@@ -19,7 +19,23 @@ export class DepartmentService {
 
   getAttachmentsByDepartment(departmentId: number) {
     return this.http.get<any[]>(
-      `${this.API}/departments/${departmentId}/attachments`
+      `${this.API}/departments/${departmentId}/attachments`,
+    );
+  }
+
+  getVisaVNTypeByDepartment(departmentId: number, typeId: number) {
+    return this.http.get<any[]>(
+      `${this.API}/departments/${departmentId}/visa-vn-type/${typeId}`,
+    );
+  }
+
+  getVisaVNTypeDetailsByDepartment(
+    departmentId: number,
+    typeId: number,
+    detailId: number,
+  ) {
+    return this.http.get<any[]>(
+      `${this.API}/departments/${departmentId}/visa-vn-type/${typeId}/details/${detailId}`,
     );
   }
 }

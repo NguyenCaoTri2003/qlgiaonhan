@@ -76,14 +76,15 @@ exports.fetchNhigiaVisaVNType = async (departmentId, typeId) => {
   }
 };
 
-exports.fetchNhigiaVisaVNTypeDetails = async (departmentId, typeId) => {
+exports.fetchNhigiaVisaVNTypeDetails = async (departmentId, typeId, detailId) => {
   try {
     const response = await axios.post(
       NHIGIA_API,
       {
-        action: "get_loai_dich_vu_visavn",
+        action: "get_chitiet_visavn_hosoyeucau",
         idbophan: departmentId,
-        idloaihosovisavn: typeId,
+        iddvvisavn: typeId,
+        idloaihosovisavn: detailId,
       },
       {
         headers: { "Content-Type": "application/json" },
