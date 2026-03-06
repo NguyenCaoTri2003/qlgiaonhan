@@ -1,0 +1,10 @@
+<label
+  class="block text-sm font-medium mb-1 transition-colors"
+  [class.text-red-500]="isInvalid"
+  [class.text-gray-700]="!isInvalid"
+>
+  {{ label }}
+  @if (required) {
+    <span class="ml-1 text-red-500">*</span>
+  }
+</label>

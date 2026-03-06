@@ -26,4 +26,6 @@ router.post("/:id/shipper-reject", ordersController.shipperReject);
 router.post("/:id/shipper-complete", ordersController.shipperComplete);
 router.post("/:id/shipper-return-supplement", ordersController.shipperReturnSupplement);
 
+router.put("/:id/resolve", ordersController.resolveRequest);
+
 module.exports = router;

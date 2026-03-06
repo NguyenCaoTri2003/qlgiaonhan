@@ -9,6 +9,7 @@ import {
   HostListener,
   effect,
   ElementRef,
+  ViewChild,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import {
@@ -23,11 +24,19 @@ import { CustomerService } from "../../services/customer.service";
 import { UsersService } from "../../services/users.service";
 import { DepartmentService } from "../../services/department.service";
 import { OrderService } from "../../services/order.service";
+import { FormLabelComponent } from "../../app/shared/form-label.component";
+import { ToastComponent } from "../../app/shared/toast/toast.component";
 
 @Component({
   selector: "app-order-form",
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    FormsModule,
+    FormLabelComponent,
+    ToastComponent,
+  ],
   template: `
     <div class="bg-white rounded-lg shadow-lg p-6 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-6 border-b pb-4">
@@ -90,9 +99,11 @@ import { OrderService } from "../../services/order.service";
             class="bg-blue-50 p-4 rounded border border-blue-100 grid grid-cols-1 md:grid-cols-2 gap-4"
           >
             <div>
-              <label class="block text-sm font-bold text-gray-700 mb-1"
-                >Bộ Phận</label
-              >
+              <app-form-label
+                label="Bộ phận"
+                [control]="form.get('department')"
+                [required]="true"
+              ></app-form-label>
               <select
                 formControlName="department"
                 class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
@@ -105,9 +116,11 @@ import { OrderService } from "../../services/order.service";
               </select>
             </div>
             <div>
-              <label class="block text-sm font-bold text-gray-700 mb-1"
-                >Người Giao</label
-              >
+              <app-form-label
+                label="Người giao"
+                [control]="form.get('senderName')"
+                [required]="true"
+              ></app-form-label>
               <div class="flex flex-col">
                 <select
                   formControlName="senderName"
@@ -137,14 +150,19 @@ import { OrderService } from "../../services/order.service";
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <!-- Phone & Auto-fill -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"
-                >Số điện thoại khách</label
-              >
+              <app-form-label
+                label="Số điện thoại"
+                [control]="form.get('phone')"
+                [required]="true"
+              ></app-form-label>
               <div class="relative">
                 <input
                   type="text"
                   formControlName="phone"
                   class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+                  [class.border-red-500]="
+                    form.get('phone')?.invalid && form.get('phone')?.touched
+                  "
                   placeholder="Nhập SĐT để tự động điền"
                 />
                 @if (isAutofilled()) {
@@ -163,14 +181,21 @@ import { OrderService } from "../../services/order.service";
                     </svg>
                   </span>
                 }
+                @if (form.get("phone")?.invalid && form.get("phone")?.touched) {
+                  <p class="text-xs text-red-500 mt-1">
+                    Vui lòng nhập số điện thoại
+                  </p>
+                }
               </div>
             </div>
 
             <!-- Company -->
             <div class="relative company-dropdown-wrapper">
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Tên công ty / Khách hàng
-              </label>
+              <app-form-label
+                label="Tên công ty / Khách hàng"
+                [control]="form.get('company')"
+                [required]="true"
+              ></app-form-label>
 
               <input
                 type="text"
@@ -228,16 +253,30 @@ import { OrderService } from "../../services/order.service";
             </h4>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Địa chỉ đầy đủ
-              </label>
+              <app-form-label
+                label="Địa chỉ đầy đủ"
+                [control]="form.get('addressLine')"
+                [required]="true"
+              ></app-form-label>
 
               <textarea
                 formControlName="addressLine"
                 rows="3"
                 placeholder="Ví dụ: 186-188 Nguyễn Duy, Phường 9, Quận 8, TP.HCM"
                 class="w-full border rounded-md py-3 px-3 text-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
+                [class.border-red-500]="
+                  form.get('addressLine')?.invalid &&
+                  form.get('addressLine')?.touched
+                "
               ></textarea>
+              @if (
+                form.get("addressLine")?.invalid &&
+                form.get("addressLine")?.touched
+              ) {
+                <p class="text-xs text-red-500 mt-1">
+                  Vui lòng nhập địa chỉ đầy đủ để tạo link Google Maps
+                </p>
+              }
             </div>
 
             @if (form.get("addressLine")?.value) {
@@ -264,14 +303,29 @@ import { OrderService } from "../../services/order.service";
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"
-                >Người liên hệ (Gặp)</label
-              >
+              <app-form-label
+                label="Người liên hệ (Gặp)"
+                [control]="form.get('contact')"
+                [required]="true"
+              ></app-form-label>
+
               <input
                 type="text"
                 formControlName="contact"
                 class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Người sẽ gặp khi giao nhận"
+                [class.border-red-500]="
+                  form.get('contact')?.invalid && form.get('contact')?.touched
+                "
               />
+
+              @if (
+                form.get("contact")?.invalid && form.get("contact")?.touched
+              ) {
+                <p class="text-xs text-red-500 mt-1">
+                  Vui lòng nhập tên người liên hệ
+                </p>
+              }
             </div>
           </div>
 
@@ -279,8 +333,11 @@ import { OrderService } from "../../services/order.service";
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1"
-                >Thời gian</label
-              >
+                >Thời gian
+                @if (isRequired("time")) {
+                  <span class="text-red-500 ml-1">*</span>
+                }
+              </label>
               <input
                 type="time"
                 formControlName="time"
@@ -289,8 +346,11 @@ import { OrderService } from "../../services/order.service";
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1"
-                >Ngày</label
-              >
+                >Ngày
+                @if (isRequired("date")) {
+                  <span class="text-red-500 ml-1">*</span>
+                }
+              </label>
               <input
                 type="date"
                 formControlName="date"
@@ -301,15 +361,25 @@ import { OrderService } from "../../services/order.service";
 
           <!-- Purpose & Notes -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1"
-              >Mục đích</label
-            >
+            <app-form-label
+              label="Mục đích"
+              [control]="form.get('purpose')"
+              [required]="true"
+            ></app-form-label>
             <input
               type="text"
               formControlName="purpose"
               class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Vd: Giao hồ sơ, Lấy dấu..."
+              [class.border-red-500]="
+                form.get('purpose')?.invalid && form.get('purpose')?.touched
+              "
             />
+            @if (form.get("purpose")?.invalid && form.get("purpose")?.touched) {
+              <p class="text-xs text-red-500 mt-1">
+                Vui lòng nhập mục đích giao nhận
+              </p>
+            }
           </div>
 
           <div>
@@ -413,20 +483,27 @@ import { OrderService } from "../../services/order.service";
                   Tài liệu đính kèm (File)
                 </h4>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  @for (file of orderData()!.uploadedFiles; track $index) {
+                  @for (file of existingFiles(); track file.id) {
                     <div
-                      class="p-3 border rounded-lg bg-gray-50 flex items-center justify-between group hover:border-blue-300 transition-colors"
+                      class="p-3 border rounded-lg bg-gray-50 flex items-center justify-between group hover:border-blue-300 transition-colors transition-all duration-200"
+                      [class.opacity-0]="file._deleting"
                     >
                       <div class="flex items-center gap-3 overflow-hidden">
-                        <span class="text-xl">
-                          {{
-                            file.type.includes("image")
-                              ? "🖼️"
-                              : file.type.includes("pdf")
-                                ? "📕"
-                                : "📄"
-                          }}
-                        </span>
+                        <div
+                          class="w-12 h-12 flex items-center justify-center overflow-hidden rounded border bg-white"
+                        >
+                          @if (file.type.includes("image")) {
+                            <img
+                              [src]="file.data"
+                              alt="preview"
+                              class="w-full h-full object-cover hover:scale-110 transition-transform duration-200"
+                            />
+                          } @else {
+                            <span class="text-xl">
+                              {{ file.type.includes("pdf") ? "📕" : "📄" }}
+                            </span>
+                          }
+                        </div>
                         <div class="flex flex-col overflow-hidden">
                           <span class="text-xs font-bold truncate">{{
                             file.name
@@ -456,6 +533,13 @@ import { OrderService } from "../../services/order.service";
                           />
                         </svg>
                       </a>
+                      <button
+                        type="button"
+                        (click)="removeExistingFile(file)"
+                        class="text-red-400 hover:text-red-600"
+                      >
+                        ✕
+                      </button>
                     </div>
                   }
                 </div>
@@ -534,6 +618,7 @@ import { OrderService } from "../../services/order.service";
                 <input
                   type="file"
                   multiple
+                  accept=".pdf,.doc,.docx,image/*"
                   (change)="onFilesUploaded($event)"
                   class="absolute inset-0 opacity-0 cursor-pointer"
                 />
@@ -555,7 +640,8 @@ import { OrderService } from "../../services/order.service";
                   Chọn hoặc kéo thả tệp vào đây
                 </p>
                 <p class="text-[10px] text-gray-400 mt-1 uppercase font-bold">
-                  Hỗ trợ File PDF, Hình ảnh, Word (.doc, .docx)
+                  Hỗ trợ File PDF, Hình ảnh, Word (.doc, .docx) và kích thước
+                  tối đa 5MB mỗi file
                 </p>
               </div>
 
@@ -608,11 +694,14 @@ import { OrderService } from "../../services/order.service";
             </button>
           </div>
         </form>
+        <app-toast></app-toast>
       }
     </div>
   `,
 })
 export class OrderFormComponent implements OnInit {
+  @ViewChild(ToastComponent) toast!: ToastComponent;
+
   orderData = input<Order | null>(null);
   save = output<Partial<Order>>();
   cancel = output<void>();
@@ -668,11 +757,20 @@ export class OrderFormComponent implements OnInit {
   isVisaVN = signal(false);
   googleMapLink = signal("");
 
+  existingFiles = signal<any[]>([]);
+  filesToDelete = signal<number[]>([]);
+
   private el = inject(ElementRef);
 
   customAttachments = signal<{ name: string; qty: number; checked: boolean }[]>(
     [],
   );
+
+  isRequired(controlName: string) {
+    const control = this.form.get(controlName);
+    if (!control) return false;
+    return control.hasValidator(Validators.required);
+  }
 
   ngOnInit() {
     const data = this.orderData();
@@ -681,8 +779,12 @@ export class OrderFormComponent implements OnInit {
       this.customAttachments.set(data.attachments.map((a) => ({ ...a })));
     }
 
+    // if (data && data.uploadedFiles) {
+    //   this.uploadedFileList.set([...(data.uploadedFiles as any)]);
+    // }
+
     if (data && data.uploadedFiles) {
-      this.uploadedFileList.set([...(data.uploadedFiles as any)]);
+      this.existingFiles.set([...(data.uploadedFiles as any)]);
     }
 
     if (data && data.senderPhone) {
@@ -736,7 +838,7 @@ export class OrderFormComponent implements OnInit {
       this.visaLevel2.set([]);
       this.customAttachments.set([]);
 
-      if (dept.code === "VISA_VN") {
+      if (dept.code === "VSVN") {
         this.isVisaVN.set(true);
 
         this.departmentService
@@ -759,10 +861,6 @@ export class OrderFormComponent implements OnInit {
 
             this.customAttachments.set(mapped);
           });
-      }
-
-      if (data?.files) {
-        this.existingFiles.set([...data.files]);
       }
     });
 
@@ -965,12 +1063,57 @@ export class OrderFormComponent implements OnInit {
     );
   }
 
+  removeExistingFile(file: any) {
+    this.filesToDelete.update((list) => [...list, file.id]);
+
+    this.existingFiles.update((list) =>
+      list.map((f) => (f.id === file.id ? { ...f, _deleting: true } : f)),
+    );
+
+    setTimeout(() => {
+      this.existingFiles.update((list) => list.filter((f) => f.id !== file.id));
+    }, 200);
+  }
+
   onFilesUploaded(event: any) {
     const input = event.target as HTMLInputElement;
     if (!input.files) return;
 
+    const allowedTypes = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+
+    const allowedImageTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/jpg",
+    ];
+
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
     const newFiles = Array.from(input.files);
-    this.uploadedFileList.update((list) => [...list, ...newFiles]);
+
+    const validFiles = newFiles.filter((file) => {
+      const isValidType =
+        allowedTypes.includes(file.type) ||
+        allowedImageTypes.includes(file.type);
+
+      const isValidSize = file.size <= MAX_SIZE;
+
+      return isValidType && isValidSize;
+    });
+
+    if (validFiles.length !== newFiles.length) {
+      this.toast.show(
+        "Chỉ được upload PDF, Word, hình ảnh và <= 5MB!",
+        "error",
+      );
+    }
+
+    this.uploadedFileList.update((list) => [...list, ...validFiles]);
 
     input.value = "";
   }
@@ -991,12 +1134,6 @@ export class OrderFormComponent implements OnInit {
     }
   }
 
-  existingFiles = signal<any[]>([]);
-
-  removeExistingFile(index: number) {
-    this.existingFiles.update((list) => list.filter((_, i) => i !== index));
-  }
-
   onSubmit() {
     if (this.form.invalid) return;
 
@@ -1005,6 +1142,8 @@ export class OrderFormComponent implements OnInit {
     const dept = this.departments().find(
       (d: any) => d.id == formVal.department,
     );
+
+    const deptcode = dept?.code || "";
 
     const attachments = this.customAttachments()
       .filter((a) => a.name.trim() !== "")
@@ -1020,7 +1159,7 @@ export class OrderFormComponent implements OnInit {
     console.log("FORM VALUE:", formVal);
     console.log("ATTACHMENTS:", attachments);
 
-    const payload = {
+    const payload: any = {
       department_id: formVal.department,
       external_department_id: dept?.external_id ?? null,
 
@@ -1044,20 +1183,18 @@ export class OrderFormComponent implements OnInit {
         ? parseInt(formVal.amountUSD.replace(/,/g, ""))
         : 0,
       attachments,
+      profile_code: deptcode,
     };
 
     console.log("Dữ liệu gửi đi:", payload);
+
+    payload.files_to_delete = this.filesToDelete();
 
     const formData = new FormData();
 
     formData.append("data", JSON.stringify(payload));
 
     const hasNewFiles = this.uploadedFileList().length > 0;
-
-    formData.append(
-      "keep_file_ids",
-      JSON.stringify(this.existingFiles().map((f) => f.id)),
-    );
 
     if (hasNewFiles) {
       this.uploadedFileList().forEach((file: File) => {
@@ -1072,16 +1209,30 @@ export class OrderFormComponent implements OnInit {
 
       this.orderService.updateOrder(id, formData).subscribe({
         next: () => {
-          this.cancel.emit();
+          this.toast.show("Cập nhật yêu cầu giao nhận thành công", "success");
+
+          setTimeout(() => {
+            this.cancel.emit();
+          }, 1200);
         },
-        error: (err) => console.error(err),
+        error: (err) => {
+          console.error(err);
+          this.toast.show("Có lỗi khi cập nhật yêu cầu giao nhận", "error");
+        },
       });
     } else {
       this.orderService.addOrder(formData).subscribe({
         next: () => {
-          this.cancel.emit();
+          this.toast.show("Tạo yêu cầu giao nhận thành công", "success");
+
+          setTimeout(() => {
+            this.cancel.emit();
+          }, 1200);
         },
-        error: (err) => console.error(err),
+        error: (err) => {
+          console.error(err);
+          this.toast.show("Có lỗi khi tạo yêu cầu giao nhận", "error");
+        },
       });
     }
   }

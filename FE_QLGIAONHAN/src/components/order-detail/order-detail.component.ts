@@ -59,7 +59,7 @@ import {
               class="text-lg leading-6 font-medium text-white"
               id="modal-title"
             >
-              Chi tiết yêu cầu: {{ order().id }}
+              Chi tiết yêu cầu: {{ order().orderCode || order().id }}
             </h3>
             <button
               (click)="close.emit()"
@@ -524,15 +524,21 @@ import {
                       class="p-3 border rounded-lg bg-gray-50 flex items-center justify-between group hover:border-blue-300 transition-colors"
                     >
                       <div class="flex items-center gap-3 overflow-hidden">
-                        <span class="text-xl">
-                          {{
-                            file.type.includes("image")
-                              ? "🖼️"
-                              : file.type.includes("pdf")
-                                ? "📕"
-                                : "📄"
-                          }}
-                        </span>
+                        <div
+                          class="w-12 h-12 flex items-center justify-center overflow-hidden rounded border bg-white"
+                        >
+                          @if (file.type.includes("image")) {
+                            <img
+                              [src]="file.data"
+                              alt="preview"
+                              class="w-full h-full object-cover hover:scale-110 transition-transform duration-200"
+                            />
+                          } @else {
+                            <span class="text-xl">
+                              {{ file.type.includes("pdf") ? "📕" : "📄" }}
+                            </span>
+                          }
+                        </div>
                         <div class="flex flex-col overflow-hidden">
                           <span class="text-xs font-bold truncate">{{
                             file.name
@@ -647,9 +653,9 @@ import {
                     <select
                       #shipperSelect
                       class="w-full h-11 px-4 border border-gray-300 rounded-lg 
-               bg-white text-sm shadow-sm
-               focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
-               transition"
+                        bg-white text-sm shadow-sm
+                        focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
+                        transition"
                     >
                       <option value="">Chọn người nhận</option>
                       @for (s of shippers(); track s.email) {
@@ -661,9 +667,9 @@ import {
                   <button
                     (click)="assign(shipperSelect.value)"
                     class="h-11 px-6 rounded-lg 
-             bg-blue-600 text-white text-sm font-semibold 
-             shadow-sm hover:bg-blue-700 
-             transition duration-200"
+                      bg-blue-600 text-white text-sm font-semibold 
+                      shadow-sm hover:bg-blue-700 
+                      transition duration-200"
                   >
                     Điều phối
                   </button>
@@ -673,10 +679,10 @@ import {
                       showRequestInput.set(false); showRequestInput.set(true)
                     "
                     class="h-11 px-6 rounded-lg 
-             border border-gray-300 bg-white 
-             text-gray-700 text-sm font-medium
-             shadow-sm hover:bg-gray-50 
-             transition duration-200"
+                      border border-gray-300 bg-white 
+                      text-gray-700 text-sm font-medium
+                      shadow-sm hover:bg-gray-50 
+                      transition duration-200"
                   >
                     Yêu cầu bổ sung
                   </button>
@@ -1020,7 +1026,8 @@ import {
           class="fixed -left-[9999px] top-0 w-[800px] bg-white p-8 text-black font-mono text-base leading-relaxed border-2 border-green-500"
         >
           <h1 class="text-2xl font-bold mb-4">
-            {{ order().id }} - Tình Trạng: {{ getStatusLabel(order().status) }}
+            {{ order().orderCode || order().id }} - Tình Trạng:
+            {{ getStatusLabel(order().status) }}
           </h1>
           <div class="border-b-2 border-dashed border-gray-800 my-6"></div>
 
@@ -1083,16 +1090,13 @@ export class OrderDetailComponent implements OnInit {
   authService = inject(AuthService);
 
   shippers = this.orderService.getShippers();
-  // shippers: User[] = [];
 
-  // Local UI State
   showRequestInput = signal(false);
   showRejectInput = signal(false);
   showCompleteForm = signal(false);
   showResolveInput = signal(false);
   showAdminRejectInput = signal(false);
 
-  // Checklist Logic
   localAttachments = signal<Attachment[]>([]);
   showMissingAlert = signal(false);
   missingItemsList = signal<string[]>([]);
@@ -1102,11 +1106,9 @@ export class OrderDetailComponent implements OnInit {
   isCompleting = signal(false);
   locationError = signal("");
 
-  // PDF State
   pdfUrl = signal<string | null>(null);
   @ViewChild("pdfTemplate") pdfTemplate!: ElementRef;
 
-  // Signature State
   @ViewChild("canvas") canvasEl!: ElementRef<HTMLCanvasElement>;
   private cx!: CanvasRenderingContext2D | null;
   hasSignature = signal(false);
@@ -1161,23 +1163,65 @@ export class OrderDetailComponent implements OnInit {
       .join(", ");
   }
 
+  // exportPdf() {
+  //   if (!this.pdfTemplate) return;
+
+  //   html2canvas(this.pdfTemplate.nativeElement, { scale: 2 }).then((canvas) => {
+  //     const imgData = canvas.toDataURL("image/png");
+  //     const pdf = new jsPDF("p", "mm", "a4");
+  //     const imgProps = pdf.getImageProperties(imgData);
+  //     const pdfWidth = pdf.internal.pageSize.getWidth();
+  //     const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+  //     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+
+  //     const blob = pdf.output("blob");
+  //     const url = URL.createObjectURL(blob);
+  //     this.pdfUrl.set(url);
+
+  //     setTimeout(() => {
+  //       URL.revokeObjectURL(url);
+  //       this.pdfUrl.set(null);
+  //     }, 60000);
+  //   });
+  // }
+
   exportPdf() {
     if (!this.pdfTemplate) return;
 
-    html2canvas(this.pdfTemplate.nativeElement, { scale: 2 }).then((canvas) => {
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    const element = this.pdfTemplate.nativeElement;
 
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+    html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+    }).then((canvas) => {
+      const imgData = canvas.toDataURL("image/png");
+
+      const pdf = new jsPDF("p", "mm", "a4");
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
 
       const blob = pdf.output("blob");
       const url = URL.createObjectURL(blob);
+
       this.pdfUrl.set(url);
 
-      // Auto revoke after 60s
       setTimeout(() => {
         URL.revokeObjectURL(url);
         this.pdfUrl.set(null);
@@ -1221,8 +1265,6 @@ export class OrderDetailComponent implements OnInit {
       attachments: this.localAttachments(),
     });
   }
-
-  // --- Standard Logic ---
 
   canEdit() {
     if (this.currentUserRole() === "IT") return true;
@@ -1281,6 +1323,7 @@ export class OrderDetailComponent implements OnInit {
   assign(email: string) {
     if (!email) return;
     const shipper = this.shippers().find((s) => s.email === email);
+    console.log("Assigning to:", shipper);
     if (shipper) {
       this.close.emit();
       this.orderService.assignReceiver(
@@ -1302,9 +1345,17 @@ export class OrderDetailComponent implements OnInit {
   submitResolve() {
     const note = this.actionNote.trim();
     if (!note) return;
-    this.close.emit();
-    this.orderService.resolveRequest(this.order().id, note);
-    this.showResolveInput.set(false);
+
+    this.orderService.resolveRequest(this.order().id, note).subscribe({
+      next: () => {
+        this.close.emit();
+        this.showResolveInput.set(false);
+        this.actionNote = "";
+      },
+      error: (err) => {
+        console.error(err);
+      },
+    });
   }
 
   submitReject() {
@@ -1509,11 +1560,11 @@ export class OrderDetailComponent implements OnInit {
 
   getDeptColorClass(dept: string): string {
     switch (dept) {
-      case "VISA_VN":
+      case "VSVN":
         return "bg-blue-500";
-      case "VISA_FOREIGN":
+      case "VSNN":
         return "bg-purple-500";
-      case "WORK_PERMIT":
+      case "GPLD":
         return "bg-teal-500";
       default:
         return "bg-gray-400";

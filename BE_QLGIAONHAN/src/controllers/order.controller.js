@@ -3,11 +3,146 @@ const pool = require("../config/database");
 const fs = require("fs");
 const path = require("path");
 
+function removeVietnameseTones(str) {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+// exports.getAllOrders = async (req, res) => {
+//   try {
+//     const page = parseInt(req.query.page) || 1;
+//     const limit = parseInt(req.query.limit) || 20;
+//     const offset = (page - 1) * limit;
+
+//     const [rows] = await pool.query(
+//       `
+//       SELECT 
+//         o.*,
+//         d.id   AS department_id,
+//         d.name AS department_name,
+//         d.code AS department_code
+//       FROM nhigia_logistics_orders o
+//       LEFT JOIN nhigia_logistics_departments d
+//         ON o.department_id = d.id
+//       ORDER BY o.updated_at DESC
+//       LIMIT ? OFFSET ?
+//       `,
+//       [limit, offset],
+//     );
+
+//     const [count] = await pool.query(
+//       `SELECT COUNT(*) as total FROM nhigia_logistics_orders`,
+//     );
+
+//     const mapped = rows.map((r) => ({
+//       id: String(r.id),
+//       orderCode: r.order_code,
+//       createDate: r.create_date,
+//       creator: r.creator,
+//       receiver: r.receiver,
+//       receiverName: r.receiver_name,
+
+//       department: r.department_id
+//         ? {
+//             id: r.department_id,
+//             name: r.department_name,
+//             code: r.department_code,
+//           }
+//         : null,
+
+//       senderName: r.sender_name,
+//       senderPhone: r.sender_phone,
+
+//       time: r.time,
+//       date: r.date,
+
+//       company: r.company,
+//       address: r.address,
+//       addressLine: r.address_line,
+//       ward: r.ward,
+//       district: r.district,
+//       province: r.province,
+
+//       contact: r.contact,
+//       phone: r.phone,
+
+//       purpose: r.purpose,
+//       notes: r.notes,
+
+//       amountVND: r.amount_vnd,
+//       amountUSD: r.amount_usd,
+
+//       missingDocs: r.missing_docs,
+
+//       status: r.status,
+//       statusUpdateDate: r.status_update_date,
+
+//       completionNote: r.completion_note,
+//       rejectionReason: r.rejection_reason,
+
+//       supplementNote: r.supplement_note,
+//       supplementRequesterName: r.supplement_requester_name,
+//       supplementDate: r.supplement_date,
+
+//       requestNote: r.request_note,
+//       reviewNote: r.review_note,
+//       adminResponse: r.admin_response,
+
+//       priority: r.priority,
+//       sort_index: r.sort_index,
+//       shipperHighlightColor: r.shipper_highlight_color,
+
+//       updatedAt: r.updated_at,
+//     }));
+
+//     res.json({
+//       data: mapped,
+//       total: count[0].total,
+//       page,
+//       totalPages: Math.ceil(count[0].total / limit),
+//     });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
 exports.getAllOrders = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
+
+    const search = req.query.search || "";
+    const dept = req.query.dept || "";
+
+    let where = [];
+    let params = [];
+
+    if (search) {
+      where.push(`
+        (
+          o.order_code LIKE ? OR
+          o.company LIKE ? OR
+          o.address LIKE ? OR
+          o.sender_name LIKE ?
+        )
+      `);
+
+      const s = `%${search}%`;
+      params.push(s, s, s, s);
+    }
+
+    if (dept) {
+      where.push(`d.code = ?`);
+      params.push(dept);
+    }
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     const [rows] = await pool.query(
       `
@@ -19,18 +154,27 @@ exports.getAllOrders = async (req, res) => {
       FROM nhigia_logistics_orders o
       LEFT JOIN nhigia_logistics_departments d
         ON o.department_id = d.id
+      ${whereSQL}
       ORDER BY o.updated_at DESC
       LIMIT ? OFFSET ?
       `,
-      [limit, offset],
+      [...params, limit, offset]
     );
 
     const [count] = await pool.query(
-      `SELECT COUNT(*) as total FROM nhigia_logistics_orders`,
+      `
+      SELECT COUNT(*) as total
+      FROM nhigia_logistics_orders o
+      LEFT JOIN nhigia_logistics_departments d
+        ON o.department_id = d.id
+      ${whereSQL}
+      `,
+      params
     );
 
     const mapped = rows.map((r) => ({
       id: String(r.id),
+      orderCode: r.order_code,
       createDate: r.create_date,
       creator: r.creator,
       receiver: r.receiver,
@@ -106,6 +250,7 @@ exports.createOrder = async (req, res) => {
     await connection.beginTransaction();
 
     const user = req.user;
+    console.log("Creating order by user:", user);
     const now = Date.now();
     // const body = req.body;
     const body = JSON.parse(req.body.data);
@@ -201,6 +346,27 @@ exports.createOrder = async (req, res) => {
 
     const orderId = result.insertId;
 
+    const date = new Date();
+
+    const yy = String(date.getFullYear()).slice(-2);
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+
+    const datePart = `${dd}${mm}${yy}`;
+
+    const profileCode = body.profile_code || "HOSO";
+
+    const idPart = String(orderId).padStart(2, "0");
+
+    const senderName = removeVietnameseTones(body.sender_name || "Unknown");
+
+    const orderCode = `${datePart}-${profileCode}-${idPart}-${senderName}`;
+
+    await connection.query(
+      `UPDATE nhigia_logistics_orders SET order_code = ? WHERE id = ?`,
+      [orderCode, orderId],
+    );
+
     if (Array.isArray(body.attachments) && body.attachments.length > 0) {
       for (const item of body.attachments) {
         await connection.query(
@@ -253,13 +419,7 @@ exports.createOrder = async (req, res) => {
       )
       VALUES (?, ?, ?, ?, ?, NOW())
       `,
-          [
-            orderId,
-            file.originalname,
-            relativePath,
-            file.mimetype,
-            file.size,
-          ],
+          [orderId, file.originalname, relativePath, file.mimetype, file.size],
         );
       }
     }
@@ -267,10 +427,10 @@ exports.createOrder = async (req, res) => {
     await connection.query(
       `
       INSERT INTO nhigia_logistics_logs
-      (timestamp, user_email, user_name, action, order_id, details)
-      VALUES (?, ?, ?, ?, ?, ?)
+      (timestamp, user_email, user_name, user_id, action, order_id, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-      [now, user.email, user.name, "CREATE", orderId, "Tạo đơn mới"],
+      [now, user.email, user.name, user.id, "CREATE", orderId, "Tạo đơn mới"],
     );
 
     await connection.query(
@@ -401,52 +561,62 @@ exports.updateOrder = async (req, res) => {
       }
     }
 
-    if (replaceFiles) {
-      const [oldFiles] = await connection.query(
-        `SELECT * FROM nhigia_logistics_files WHERE order_id = ?`,
-        [orderId],
-      );
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const relativePath = file.path
+          .split("uploads\\")[1]
+          .replace(/\\/g, "/");
 
-      await connection.query(
-        `DELETE FROM nhigia_logistics_files WHERE order_id = ?`,
-        [orderId],
-      );
-
-      for (const file of oldFiles) {
-        const filePath = path.join(__dirname, "..", "uploads", file.file_path);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
+        await connection.query(
+          `
+            INSERT INTO nhigia_logistics_files
+            (
+              order_id,
+              original_name,
+              file_name,
+              file_path,
+              file_type,
+              file_size,
+              created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+          `,
+          [
+            orderId,
+            file.originalname,
+            file.filename,
+            relativePath,
+            file.mimetype,
+            file.size,
+          ],
+        );
       }
+    }
 
-      if (files && files.length > 0) {
-        for (const file of files) {
-          const relativePath = file.path
-            .split("uploads\\")[1]
-            .replace(/\\/g, "/");
+    if (body.files_to_delete && body.files_to_delete.length > 0) {
+      for (const fileId of body.files_to_delete) {
+        const [rows] = await connection.query(
+          `SELECT * FROM nhigia_logistics_files WHERE id = ?`,
+          [fileId],
+        );
+
+        if (rows.length > 0) {
+          const file = rows[0];
+
+          const filePath = path.join(
+            __dirname,
+            "..",
+            "uploads",
+            file.file_path,
+          );
+
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
 
           await connection.query(
-            `
-        INSERT INTO nhigia_logistics_files
-        (
-          order_id,
-          original_name,
-          file_name,
-          file_path,
-          file_type,
-          file_size,
-          created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, NOW())
-        `,
-            [
-              orderId,
-              file.originalname,
-              file.filename,
-              relativePath,
-              file.mimetype,
-              file.size,
-            ],
+            `DELETE FROM nhigia_logistics_files WHERE id = ?`,
+            [fileId],
           );
         }
       }
@@ -625,7 +795,8 @@ exports.assignReceiver = async (req, res) => {
     await pool.query(
       `UPDATE nhigia_logistics_orders
        SET receiver = ?, receiver_name = ?,
-           status = ?, status_update_date = ?
+           status = ?, status_update_date = ?,
+            updated_at = NOW()
        WHERE id = ?`,
       [receiver_email, receiver_name, "ASSIGNED", now, orderId],
     );
@@ -689,7 +860,8 @@ exports.qlRequestSupplement = async (req, res) => {
     `UPDATE nhigia_logistics_orders
      SET status = ?, status_update_date = ?,
          supplement_note = ?, supplement_requester_name = ?,
-         supplement_date = ?, receiver = NULL, receiver_name = NULL
+         supplement_date = ?, receiver = NULL, receiver_name = NULL,
+         updated_at = NOW()
      WHERE id = ?`,
     ["SUPPLEMENT_REQUIRED", now, req.body.note, "QL", now, req.params.id],
   );
@@ -697,18 +869,18 @@ exports.qlRequestSupplement = async (req, res) => {
   res.json({ message: "Requested supplement" });
 };
 
-exports.resolveRequest = async (req, res) => {
-  const now = Date.now();
+// exports.resolveRequest = async (req, res) => {
+//   const now = Date.now();
 
-  await pool.query(
-    `UPDATE nhigia_logistics_orders
-     SET status = ?, status_update_date = ?, admin_response = ?
-     WHERE id = ?`,
-    ["PENDING", now, req.body.note, req.params.id],
-  );
+//   await pool.query(
+//     `UPDATE nhigia_logistics_orders
+//      SET status = ?, status_update_date = ?, admin_response = ?, updated_at = NOW()
+//      WHERE id = ?`,
+//     ["PENDING", now, req.body.note, req.params.id],
+//   );
 
-  res.json({ message: "Resolved" });
-};
+//   res.json({ message: "Resolved" });
+// };
 
 exports.shipperReturnSupplement = async (req, res) => {
   const now = Date.now();
@@ -724,114 +896,6 @@ exports.shipperReturnSupplement = async (req, res) => {
 
   res.json({ message: "Shipper requested supplement" });
 };
-
-// exports.getOrderDetail = async (req, res) => {
-//   try {
-//     const orderId = req.params.id;
-
-//     const [[r]] = await pool.query(
-//       `
-//       SELECT
-//         o.*,
-//         d.id AS department_id,
-//         d.name AS department_name,
-//         d.code AS department_code
-//       FROM nhigia_logistics_orders o
-//       LEFT JOIN nhigia_logistics_departments d
-//         ON o.department_id = d.id
-//       WHERE o.id = ?
-//       `,
-//       [orderId],
-//     );
-
-//     if (!r) {
-//       return res.status(404).json({ message: "Order not found" });
-//     }
-
-//     const [attachmentRows] = await pool.query(
-//       `
-//       SELECT id, order_id, name, qty, checked
-//       FROM nhigia_logistics_attachments
-//       WHERE order_id = ?
-//       `,
-//       [orderId],
-//     );
-
-//     const attachments = attachmentRows.map((a) => ({
-//       id: a.id,
-//       orderId: a.order_id,
-//       name: a.name,
-//       qty: a.qty,
-//       checked: !!a.checked,
-//     }));
-
-//     const mapped = {
-//       id: String(r.id),
-
-//       createDate: r.create_date,
-//       creator: r.creator,
-
-//       receiver: r.receiver,
-//       receiverName: r.receiver_name,
-
-//       department: r.department_id
-//         ? {
-//             id: r.department_id,
-//             name: r.department_name,
-//             code: r.department_code,
-//           }
-//         : null,
-
-//       senderName: r.sender_name,
-//       senderPhone: r.sender_phone,
-
-//       time: r.time,
-//       date: r.date,
-
-//       company: r.company,
-//       address: r.address,
-//       addressLine: r.address_line,
-//       ward: r.ward,
-//       district: r.district,
-//       province: r.province,
-
-//       contact: r.contact,
-//       phone: r.phone,
-
-//       purpose: r.purpose,
-//       notes: r.notes,
-
-//       amountVND: r.amount_vnd,
-//       amountUSD: r.amount_usd,
-
-//       missingDocs: r.missing_docs,
-
-//       status: r.status,
-//       statusUpdateDate: r.status_update_date,
-
-//       completionNote: r.completion_note,
-//       rejectionReason: r.rejection_reason,
-
-//       supplementNote: r.supplement_note,
-//       supplementRequesterName: r.supplement_requester_name,
-//       supplementDate: r.supplement_date,
-
-//       requestNote: r.request_note,
-//       reviewNote: r.review_note,
-//       adminResponse: r.admin_response,
-
-//       priority: r.priority,
-//       sortIndex: r.sort_index,
-//       shipperHighlightColor: r.shipper_highlight_color,
-
-//       attachments,
-//     };
-
-//     res.json(mapped);
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// };
 
 exports.getOrderDetail = async (req, res) => {
   try {
@@ -891,7 +955,7 @@ exports.getOrderDetail = async (req, res) => {
 
     const mapped = {
       id: String(r.id),
-
+      orderCode: r.order_code,
       createDate: r.create_date,
       creator: r.creator,
 
@@ -956,5 +1020,49 @@ exports.getOrderDetail = async (req, res) => {
     console.log("Fetched order detail", mapped);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+exports.resolveRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+
+    if (!note) {
+      return res.status(400).json({ error: "Thiếu nội dung bổ sung" });
+    }
+
+    const now = Date.now();
+    const user = req.user || {};
+
+    await pool.query(
+      `UPDATE nhigia_logistics_orders
+       SET status = 'PENDING',
+           supplement_note = NULL,
+           admin_response = ?,
+           updated_at = NOW()
+       WHERE id = ?`,
+      [note, id],
+    );
+
+    await pool.query(
+      `INSERT INTO nhigia_logistics_logs
+      (user_id, timestamp, user_email, user_name, action, order_id, details)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        user.id || null,
+        now,
+        user.email || null,
+        user.name || null,
+        "RESOLVE_SUPPLEMENT",
+        id,
+        `Đã bổ sung: ${note}`,
+      ],
+    );
+
+    return res.json({ message: "Đã bổ sung thành công" });
+  } catch (error) {
+    console.error("Resolve error:", error);
+    return res.status(500).json({ error: "Lỗi server" });
   }
 };

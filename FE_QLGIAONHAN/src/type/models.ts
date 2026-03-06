@@ -69,6 +69,7 @@ export const SENDERS: Sender[] = [
 
 export interface Order {
   id: number;
+  orderCode: string;
   createDate: number;
   creator: string;
   receiver: string | null;

@@ -2,6 +2,7 @@ import { Injectable, signal, computed, inject, effect } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { AuthService } from "./auth.service";
 import { Order, LocationData, FilterType } from "../type/models";
+import { tap } from "rxjs";
 
 @Injectable({ providedIn: "root" })
 export class OrderService {
@@ -16,6 +17,8 @@ export class OrderService {
 
   private _totalPages = signal<number>(0);
   totalPages = this._totalPages.asReadonly();
+
+  loading = signal(false);
 
   constructor() {
     effect(
@@ -40,15 +43,40 @@ export class OrderService {
     this._orders.set([]);
   }
 
-  loadOrders(page: number = 1, limit: number = 20) {
+  // loadOrders(page: number = 1, limit: number = 20) {
+  //   this.http
+  //     .get<any>(`${this.API}/orders?page=${page}&limit=${limit}`)
+  //     .subscribe({
+  //       next: (res) => {
+  //         this._orders.set(res.data);
+  //         this._totalPages.set(res.totalPages);
+  //       },
+  //       error: (err) => console.error("Load orders error:", err),
+  //     });
+  // }
+
+  loadOrders(
+    page: number = 1,
+    limit: number = 20,
+    search: string = "",
+    dept: string = "",
+  ) {
+    this.loading.set(true);
+
     this.http
-      .get<any>(`${this.API}/orders?page=${page}&limit=${limit}`)
+      .get<any>(
+        `${this.API}/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}`,
+      )
       .subscribe({
         next: (res) => {
           this._orders.set(res.data);
           this._totalPages.set(res.totalPages);
+          this.loading.set(false);
         },
-        error: (err) => console.error("Load orders error:", err),
+        error: (err) => {
+          console.error("Load orders error:", err);
+          this.loading.set(false);
+        },
       });
   }
 
@@ -81,8 +109,8 @@ export class OrderService {
   assignReceiver(id: number, email: string, name: string) {
     this.http
       .post(`${this.API}/orders/${id}/assign`, {
-        receiverEmail: email,
-        receiverName: name,
+        receiver_email: email,
+        receiver_name: name,
       })
       .subscribe({
         next: () => this.refreshOrders(),
@@ -210,17 +238,35 @@ export class OrderService {
       });
   }
 
-  resolveRequest(orderId: number, note: string) {
-    this.http
-      .put(`${this.API}/orders/${orderId}`, {
-        status: "PENDING",
-        statusUpdateDate: Date.now(),
-        adminResponse: note,
-      })
-      .subscribe({
-        next: () => this.refreshOrders(),
-        error: (err) => console.error("Resolve request error:", err),
-      });
+  // resolveRequest(id: number, note: string) {
+  //   return this.http.put(`${this.API}/orders/${id}/resolve`, {
+  //     note: note,
+  //   });
+  // }
+
+  resolveRequest(id: number, note: string) {
+    return this.http.put(`${this.API}/orders/${id}/resolve`, { note }).pipe(
+      tap(() => {
+        this._orders.update((list) => {
+          const updated = list.map((o) =>
+            o.id === id
+              ? ({
+                  ...o,
+                  status: "PENDING",
+                  supplementNote: undefined,
+                  adminResponse: note,
+                  updatedAt: new Date().toISOString(),
+                } as unknown as Order)
+              : o,
+          );
+
+          return updated.sort(
+            (a, b) =>
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+          );
+        });
+      }),
+    );
   }
 
   requestInfo(orderId: number, note: string) {
