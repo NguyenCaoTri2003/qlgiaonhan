@@ -20,6 +20,10 @@ export class OrderService {
 
   loading = signal(false);
 
+  setOrders(list: Order[]) {
+    this._orders.set(list);
+  }
+
   constructor() {
     effect(
       () => {
@@ -43,29 +47,18 @@ export class OrderService {
     this._orders.set([]);
   }
 
-  // loadOrders(page: number = 1, limit: number = 20) {
-  //   this.http
-  //     .get<any>(`${this.API}/orders?page=${page}&limit=${limit}`)
-  //     .subscribe({
-  //       next: (res) => {
-  //         this._orders.set(res.data);
-  //         this._totalPages.set(res.totalPages);
-  //       },
-  //       error: (err) => console.error("Load orders error:", err),
-  //     });
-  // }
-
   loadOrders(
     page: number = 1,
     limit: number = 20,
     search: string = "",
     dept: string = "",
+    filter: string = "ALL",
   ) {
     this.loading.set(true);
 
     this.http
       .get<any>(
-        `${this.API}/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}`,
+        `${this.API}/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}&filter=${filter}`,
       )
       .subscribe({
         next: (res) => {
@@ -84,13 +77,6 @@ export class OrderService {
     return this.http.get<Order>(`${this.API}/orders/${id}`);
   }
 
-  // addOrder(order: Partial<Order>) {
-  //   this.http.post(`${this.API}/orders`, order).subscribe({
-  //     next: () => this.refreshOrders(),
-  //     error: (err) => console.error("Add order error:", err),
-  //   });
-  // }
-
   createOrder(order: Partial<Order>) {
     return this.http.post<{ message: string; id: number }>(
       `${this.API}/orders`,
@@ -106,11 +92,17 @@ export class OrderService {
     return this.http.put(`${this.API}/orders/${id}`, updates);
   }
 
-  assignReceiver(id: number, email: string, name: string) {
+  assignReceiver(
+    id: number,
+    receiver_id: number,
+    receiver_email: string,
+    receiver_name: string,
+  ) {
     this.http
       .post(`${this.API}/orders/${id}/assign`, {
-        receiver_email: email,
-        receiver_name: name,
+        receiver_id,
+        receiver_email,
+        receiver_name,
       })
       .subscribe({
         next: () => this.refreshOrders(),
@@ -118,9 +110,21 @@ export class OrderService {
       });
   }
 
-  shipperAccept(id: number, missingDocs?: string) {
+  // shipperAccept(id: number, missingDocs?: string) {
+  //   this.http
+  //     .post(`${this.API}/orders/${id}/accept`, {
+  //       missingDocs,
+  //     })
+  //     .subscribe({
+  //       next: () => this.refreshOrders(),
+  //       error: (err) => console.error("Accept error:", err),
+  //     });
+  // }
+
+  shipperAccept(id: number, checklist: any[], missingDocs?: string) {
     this.http
       .post(`${this.API}/orders/${id}/accept`, {
+        checklist,
         missingDocs,
       })
       .subscribe({
@@ -140,20 +144,45 @@ export class OrderService {
       });
   }
 
+  // shipperComplete(
+  //   id: number,
+  //   images: string[],
+  //   location: LocationData,
+  //   signature: string,
+  //   note: string,
+  // ) {
+  //   this.http
+  //     .post(`${this.API}/orders/${id}/shipper-complete`, {
+  //       images,
+  //       location,
+  //       signature,
+  //       note,
+  //     })
+  //     .subscribe({
+  //       next: () => this.refreshOrders(),
+  //       error: (err) => console.error("Shipper complete error:", err),
+  //     });
+  // }
+
   shipperComplete(
     id: number,
-    images: string[],
+    files: File[],
     location: LocationData,
     signature: string,
     note: string,
   ) {
+    const formData = new FormData();
+
+    files.forEach((file) => {
+      formData.append("files", file);
+    });
+
+    formData.append("note", note);
+    formData.append("signature", signature);
+    formData.append("location", JSON.stringify(location));
+
     this.http
-      .post(`${this.API}/orders/${id}/shipper-complete`, {
-        images,
-        location,
-        signature,
-        note,
-      })
+      .post(`${this.API}/orders/${id}/shipper-complete`, formData)
       .subscribe({
         next: () => this.refreshOrders(),
         error: (err) => console.error("Shipper complete error:", err),
@@ -219,30 +248,19 @@ export class OrderService {
       });
   }
 
-  // updateOrder(id: number, updates: Partial<Order>) {
-  //   this.http.put(`${this.API}/orders/${id}`, updates).subscribe({
-  //     next: () => this.refreshOrders(),
-  //     error: (err) => console.error("Update order error:", err),
-  //   });
-  // }
-
-  updateOrderSort(userId: string, orderIds: string[]) {
+  updateOrderSort(userId: number, orderIds: string[]) {
     this.http
       .post(`${this.API}/orders/update-sort`, {
         userId,
         orderIds,
       })
       .subscribe({
-        next: () => this.loadOrders(),
+        next: () => {
+          console.log("Sort saved");
+        },
         error: (err) => console.error("Update sort error:", err),
       });
   }
-
-  // resolveRequest(id: number, note: string) {
-  //   return this.http.put(`${this.API}/orders/${id}/resolve`, {
-  //     note: note,
-  //   });
-  // }
 
   resolveRequest(id: number, note: string) {
     return this.http.put(`${this.API}/orders/${id}/resolve`, { note }).pipe(
@@ -277,9 +295,18 @@ export class OrderService {
     orderId: number,
     color: "red" | "blue" | "yellow" | null,
   ) {
-    this.updateOrder(orderId, { shipperHighlightColor: color });
+    return this.http
+      .put(`${this.API}/orders/${orderId}/highlight`, { color })
+      .pipe(
+        tap(() => {
+          this._orders.update((list) =>
+            list.map((o) =>
+              o.id === orderId ? { ...o, shipperHighlightColor: color } : o,
+            ),
+          );
+        }),
+      );
   }
-
   getShippers() {
     this.authService.getUsers("NVGN");
     return this.authService.users;

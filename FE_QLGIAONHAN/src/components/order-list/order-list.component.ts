@@ -34,7 +34,15 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
   template: `
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-xl font-bold text-gray-800">
-        DANH SÁCH CÔNG VIỆC (JOB LIST)
+        {{
+          authService.userRole() === "NVADMIN" ||
+          authService.userRole() === "QL" ||
+          authService.userRole() === "IT"
+            ? "DANH SÁCH YÊU CẦU GIAO NHẬN CẦN XỬ LÝ"
+            : authService.userRole() === "NVGN"
+              ? "DANH SÁCH HỒ SƠ CẦN GIAO"
+              : "DANH SÁCH YÊU CẦU GIAO NHẬN"
+        }}
       </h2>
 
       @if (
@@ -176,11 +184,13 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
             (cdkDropListDropped)="onDrop($event)"
             [cdkDropListDisabled]="authService.userRole() !== 'NVGN'"
           >
-            @for (order of filteredOrders(); track order.id) {
+            @for (order of orders(); track order.id) {
               <div
                 [class]="
                   'p-4 border-b border-gray-200 cursor-pointer transition-colors relative ' +
-                  getShipperHighlightClass(order.shipperHighlightColor)
+                  (isShipper() && order.shipperHighlightColor
+                    ? getShipperHighlightClass(order.shipperHighlightColor)
+                    : 'hover:bg-blue-50')
                 "
                 cdkDrag
                 (click)="clickItem($event, order)"
@@ -202,7 +212,7 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
                 <div class="flex justify-between items-start mb-2 pl-2">
                   <div class="flex flex-col">
                     <span class="font-bold text-sm text-blue-700 leading-tight"
-                      >#{{ order.orderId || order.id }}</span
+                      >#{{ order.orderCode || order.id }}</span
                     >
                     <span
                       [class]="
@@ -312,7 +322,7 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
                 </div>
               </div>
             }
-            @if (filteredOrders().length === 0) {
+            @if (orders().length === 0) {
               <div class="p-8 text-center text-gray-500">
                 Chưa có công việc nào.
               </div>
@@ -352,11 +362,11 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                @for (order of filteredOrders(); track order.id) {
+                @for (order of orders(); track order.id) {
                   <tr
                     [class]="
                       'cursor-pointer transition-colors ' +
-                      (order.shipperHighlightColor
+                      (isShipper() && order.shipperHighlightColor
                         ? getShipperHighlightClass(order.shipperHighlightColor)
                         : 'hover:bg-blue-50')
                     "
@@ -488,7 +498,7 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
                     </td>
                   </tr>
                 }
-                @if (filteredOrders().length === 0) {
+                @if (orders().length === 0) {
                   <tr>
                     <td
                       colspan="5"
@@ -647,7 +657,6 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
                   class="space-y-4"
                 >
                   <button
-                    (click)="assignOrder()"
                     class="w-full bg-blue-600 text-white py-3 rounded font-bold uppercase shadow-md hover:bg-blue-700 transition-all"
                   >
                     Điều phối nhân viên
@@ -782,7 +791,7 @@ export class OrderListComponent {
   authService = inject(AuthService);
 
   // Filter signals
-  currentFilter = this.orderService.orderListFilter;
+  currentFilter = signal<FilterType>("ALL");
   searchTerm = signal("");
   filterDept = signal("");
   isSearched = signal(false);
@@ -803,6 +812,8 @@ export class OrderListComponent {
   limit = 20;
 
   loading = signal(false);
+
+  isShipper = computed(() => this.authService.userRole() === "NVGN");
 
   ngOnInit() {
     this.load();
@@ -840,6 +851,7 @@ export class OrderListComponent {
       this.limit,
       this.searchTerm(),
       this.filterDept(),
+      this.currentFilter(),
     );
   }
 
@@ -849,6 +861,7 @@ export class OrderListComponent {
       this.limit,
       this.searchTerm(),
       this.filterDept(),
+      this.currentFilter(),
     );
   }
 
@@ -870,48 +883,9 @@ export class OrderListComponent {
     this.search();
   }
 
-  // Sắp xếp & lọc orders theo role
-  rawScopedOrders = computed(() => {
-    const all = this.orderService.orders();
-    const role = this.authService.userRole();
-    const userEmail = this.authService.currentUser()?.email;
-
-    if (role === "QL" || role === "IT" || role === "NVADMIN") {
-      return all;
-    }
-
-    if (role === "NVGN") {
-      return all.filter(
-        (o) => o.receiver === userEmail && o.status !== "SUPPLEMENT_REQUIRED",
-      );
-    }
-
-    return [];
-  });
-
-  filteredOrders = computed(() => {
-    const orders = this.rawScopedOrders();
-    const filter = this.currentFilter();
-
-    let result = [...orders];
-
-    if (filter === "PENDING_GROUP") {
-      result = result.filter((o) =>
-        ["PENDING", "ASSIGNED", "PROCESSING", "SUPPLEMENT_REQUIRED"].includes(
-          o.status,
-        ),
-      );
-    } else if (filter === "DONE_GROUP") {
-      result = result.filter((o) =>
-        ["COMPLETED", "FINISHED"].includes(o.status),
-      );
-    }
-
-    if (this.authService.userRole() === "NVGN") {
-      return result.sort((a, b) => (a.sort_index ?? 0) - (b.sort_index ?? 0));
-    }
-
-    return result;
+  orders = computed(() => {
+    const orders = this.orderService.orders();
+    return orders;
   });
 
   openCreate() {
@@ -942,7 +916,9 @@ export class OrderListComponent {
   }
 
   setFilter(filter: FilterType) {
-    this.orderService.orderListFilter.set(filter);
+    this.currentFilter.set(filter);
+    this.currentPage = 1;
+    this.load();
   }
 
   confirmDelete(event: Event, order: Order) {
@@ -956,16 +932,18 @@ export class OrderListComponent {
     }
   }
 
-  // Action logic
   clickItem(event: Event, order: Order) {
     const target = event.target as HTMLElement;
+
     if (
       target.closest("button") ||
       target.closest("a") ||
       (target as any).type === "checkbox"
-    )
+    ) {
       return;
-    this.select.emit(order);
+    }
+
+    this.openDetail(order);
   }
 
   openAction(event: Event, order: Order) {
@@ -1007,19 +985,19 @@ export class OrderListComponent {
     this.orderService.adminFinalize(o.id, false, this.actionReason);
   }
 
-  assignOrder() {
-    const o = this.selectedActionOrder();
-    if (!o) return;
-    const shipper = prompt(
-      "Nhập email Shipper (VD: nvgiaonhan1@nhigia.vn):",
-      "nvgiaonhan1@nhigia.vn",
-    );
-    if (shipper) {
-      this.closeAction();
-      const name = shipper.includes("1") ? "Văn Giàu" : "Trung Hiếu";
-      this.orderService.assignReceiver(o.id, shipper, name);
-    }
-  }
+  // assignOrder() {
+  //   const o = this.selectedActionOrder();
+  //   if (!o) return;
+  //   const shipper = prompt(
+  //     "Nhập email Shipper (VD: nvgiaonhan1@nhigia.vn):",
+  //     "nvgiaonhan1@nhigia.vn",
+  //   );
+  //   if (shipper) {
+  //     this.closeAction();
+  //     const name = shipper.includes("1") ? "Văn Giàu" : "Trung Hiếu";
+  //     this.orderService.assignReceiver(o.id,  shipper, shipper, name);
+  //   }
+  // }
 
   requestSupplementQL() {
     const o = this.selectedActionOrder();
@@ -1033,7 +1011,7 @@ export class OrderListComponent {
     const o = this.selectedActionOrder();
     if (!o) return;
     this.closeAction();
-    this.orderService.shipperAccept(o.id);
+    // this.orderService.shipperAccept(o.id);
   }
 
   rejectJob() {
@@ -1063,27 +1041,30 @@ export class OrderListComponent {
     };
     const imgs = ["image1.jpg", "image2.pdf"];
     this.closeAction();
-    this.orderService.shipperComplete(
-      o.id,
-      imgs,
-      loc,
-      this.mockSignature,
-      this.actionNote || "Đã xong",
-    );
+    // this.orderService.shipperComplete(
+    //   o.id,
+    //   imgs,
+    //   loc,
+    //   this.mockSignature,
+    //   this.actionNote || "Đã xong",
+    // );
   }
 
   onDrop(event: CdkDragDrop<Order[]>) {
-    const list = this.rawScopedOrders();
-    const newItems = [...list];
-    moveItemInArray(newItems, event.previousIndex, event.currentIndex);
-    const orderIds = newItems.map((o) => String(o.id));
-    this.orderService.updateOrderSort(
-      this.authService.currentUser()?.email || "unknown",
-      orderIds,
-    );
+    const list = [...this.orders()];
+
+    moveItemInArray(list, event.previousIndex, event.currentIndex);
+
+    this.orderService.setOrders(list);
+
+    const orderIds = list.map((o) => String(o.id));
+
+    const userId = this.authService.currentUser()?.id;
+    if (userId !== undefined && userId !== null) {
+      this.orderService.updateOrderSort(userId, orderIds);
+    }
   }
 
-  // UI Helpers
   encodeAddress(addr: string): string {
     return encodeURIComponent(addr);
   }

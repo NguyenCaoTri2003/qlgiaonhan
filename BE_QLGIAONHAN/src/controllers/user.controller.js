@@ -26,8 +26,10 @@ exports.getSenders = async (req, res) => {
     const data = await nhigiaService.fetchNhigiaUsers();
 
     const mapped = data.data.map((u) => ({
-      id: u.iduser,
-      name: u.ten,
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role
     }));
 
     res.json(mapped);

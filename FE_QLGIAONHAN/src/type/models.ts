@@ -17,6 +17,7 @@ export interface DepartmentType {
 export type FilterType = 'ALL' | 'PENDING_GROUP' | 'DONE_GROUP' | 'SUPPLEMENT';
 
 export interface Attachment {
+  id: any;
   name: string;
   qty: number;
   checked: boolean;

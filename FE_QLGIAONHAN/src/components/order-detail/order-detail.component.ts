@@ -383,22 +383,18 @@ import {
                 }
               </div>
               <div class="divide-y divide-gray-200">
-                @for (
-                  att of localAttachments();
-                  track att.name;
-                  let i = $index
-                ) {
+                @for (att of localAttachments(); track att.id; let i = $index) {
                   <div
                     class="flex items-center p-3 hover:bg-gray-50 transition-colors"
-                    [class.bg-green-50]="att.checked"
+                    [class.bg-green-50]="!!att.checked"
                   >
                     <div class="flex-shrink-0 mr-3">
                       <input
                         type="checkbox"
-                        [checked]="att.checked"
+                        [checked]="!!att.checked"
                         [disabled]="!isChecklistActive()"
                         (change)="toggleItem(i)"
-                        class="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
+                        class="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
                     </div>
                     <div class="flex-1 min-w-0">
@@ -576,11 +572,18 @@ import {
 
             <!-- Assignment Info -->
             @if (order().receiverName) {
-              <div class="mt-4 pt-4 border-t flex items-center justify-between">
+              <div class="mt-4 pt-4 border-t flex items-start justify-between">
                 <span class="text-sm text-gray-500">Người thực hiện:</span>
-                <span class="font-bold text-indigo-700">{{
-                  order().receiverName
-                }}</span>
+
+                <div class="text-right">
+                  <div class="font-semibold text-indigo-700">
+                    {{ order().receiverName }}
+                  </div>
+
+                  <div class="text-xs text-gray-500 break-all">
+                    {{ order().receiver }}
+                  </div>
+                </div>
               </div>
             }
           </div>
@@ -1020,6 +1023,7 @@ import {
             </div>
           }
         </div>
+
         <!-- Hidden PDF Template -->
         <div
           #pdfTemplate
@@ -1119,7 +1123,7 @@ export class OrderDetailComponent implements OnInit {
     if (this.order()?.attachments) {
       const cloned = this.order().attachments.map((a) => ({
         ...a,
-        checked: false,
+        checked: !!a.checked,
       }));
       this.localAttachments.set(cloned);
     } else {
@@ -1133,7 +1137,7 @@ export class OrderDetailComponent implements OnInit {
       (status === "ASSIGNED" ||
         status === "PENDING" ||
         status === "SUPPLEMENT_REQUIRED") &&
-      (this.currentUserRole() === "NVGN" || this.currentUserRole() === "QL")
+      this.currentUserRole() === "NVGN"
     );
   }
 
@@ -1162,29 +1166,6 @@ export class OrderDetailComponent implements OnInit {
       .map((a) => `${a.name} (${a.qty})`)
       .join(", ");
   }
-
-  // exportPdf() {
-  //   if (!this.pdfTemplate) return;
-
-  //   html2canvas(this.pdfTemplate.nativeElement, { scale: 2 }).then((canvas) => {
-  //     const imgData = canvas.toDataURL("image/png");
-  //     const pdf = new jsPDF("p", "mm", "a4");
-  //     const imgProps = pdf.getImageProperties(imgData);
-  //     const pdfWidth = pdf.internal.pageSize.getWidth();
-  //     const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
-  //     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-
-  //     const blob = pdf.output("blob");
-  //     const url = URL.createObjectURL(blob);
-  //     this.pdfUrl.set(url);
-
-  //     setTimeout(() => {
-  //       URL.revokeObjectURL(url);
-  //       this.pdfUrl.set(null);
-  //     }, 60000);
-  //   });
-  // }
 
   exportPdf() {
     if (!this.pdfTemplate) return;
@@ -1230,22 +1211,38 @@ export class OrderDetailComponent implements OnInit {
   }
 
   attemptAccept() {
-    const missing = this.localAttachments().filter((a) => !a.checked);
+    const attachments = this.localAttachments();
+    const missing = attachments.filter((a) => !a.checked);
+
     if (missing.length > 0) {
       this.missingItemsList.set(missing.map((a) => `${a.name} (x${a.qty})`));
       this.showMissingAlert.set(true);
     } else {
+      const checklist = attachments.map((a) => ({
+        id: a.id,
+        checked: a.checked,
+      }));
+
       this.commitChecklist();
       this.close.emit();
-      this.orderService.shipperAccept(this.order().id);
+      this.orderService.shipperAccept(this.order().id, checklist);
     }
   }
 
   confirmAcceptMissing() {
-    this.commitChecklist();
+    const attachments = this.localAttachments();
+    const checklist = attachments.map((a) => ({
+      id: a.id,
+      checked: a.checked,
+    }));
+
     const missingStr = this.getMissingItemsString();
+
+    this.commitChecklist();
     this.close.emit();
-    this.orderService.shipperAccept(this.order().id, missingStr);
+
+    this.orderService.shipperAccept(this.order().id, checklist, missingStr);
+
     this.showMissingAlert.set(false);
   }
 
@@ -1309,7 +1306,15 @@ export class OrderDetailComponent implements OnInit {
   }
 
   setHighlight(color: "red" | "blue" | "yellow" | null) {
-    this.orderService.setShipperHighlightColor(this.order().id, color);
+    const order = this.order();
+
+    order.shipperHighlightColor = color;
+
+    this.orderService.setShipperHighlightColor(order.id, color).subscribe({
+      error: () => {
+        order.shipperHighlightColor = null;
+      },
+    });
   }
 
   onEdit() {
@@ -1328,6 +1333,7 @@ export class OrderDetailComponent implements OnInit {
       this.close.emit();
       this.orderService.assignReceiver(
         this.order().id,
+        shipper.id,
         shipper.email,
         shipper.name,
       );
@@ -1491,43 +1497,72 @@ export class OrderDetailComponent implements OnInit {
     return this.previewImages().length > 0 && this.hasSignature();
   }
 
+  selectedFiles = signal<File[]>([]);
+
+  // previewImages = signal<string[]>([]);
+
+  // submitComplete() {
+  //   if (!this.canSubmitDone()) return;
+
+  //   this.isCompleting.set(true);
+  //   this.locationError.set("");
+
+  //   if (!navigator.geolocation) {
+  //     this.locationError.set("Trình duyệt không hỗ trợ Geolocation.");
+  //     this.isCompleting.set(false);
+  //     return;
+  //   }
+
+  //   navigator.geolocation.getCurrentPosition(
+  //     (position) => {
+  //       const location = {
+  //         lat: position.coords.latitude,
+  //         lng: position.coords.longitude,
+  //       };
+
+  //       const signatureBase64 = this.canvasEl.nativeElement.toDataURL();
+
+  //       this.close.emit();
+  //       this.orderService.shipperComplete(
+  //         this.order().id,
+  //         this.selectedFiles(),
+  //         location,
+  //         signatureBase64,
+  //         this.actionNote || "Đã hoàn tất",
+  //       );
+  //       this.isCompleting.set(false);
+  //     },
+  //     (error) => {
+  //       this.isCompleting.set(false);
+  //       this.locationError.set("Bắt buộc bật GPS để hoàn tất.");
+  //     },
+  //     { timeout: 10000, enableHighAccuracy: true },
+  //   );
+  // }
+
   submitComplete() {
     if (!this.canSubmitDone()) return;
 
     this.isCompleting.set(true);
     this.locationError.set("");
 
-    if (!navigator.geolocation) {
-      this.locationError.set("Trình duyệt không hỗ trợ Geolocation.");
-      this.isCompleting.set(false);
-      return;
-    }
+    const location = {
+      lat: 10.7769,
+      lng: 106.7009,
+    };
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const location = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
+    const signatureBase64 = this.canvasEl.nativeElement.toDataURL();
 
-        const signatureBase64 = this.canvasEl.nativeElement.toDataURL();
-
-        this.close.emit(); // Close immediately
-        this.orderService.shipperComplete(
-          this.order().id,
-          this.previewImages(),
-          location,
-          signatureBase64,
-          this.actionNote || "Đã hoàn tất",
-        );
-        this.isCompleting.set(false);
-      },
-      (error) => {
-        this.isCompleting.set(false);
-        this.locationError.set("Bắt buộc bật GPS để hoàn tất.");
-      },
-      { timeout: 10000, enableHighAccuracy: true },
+    this.close.emit();
+    this.orderService.shipperComplete(
+      this.order().id,
+      this.selectedFiles(),
+      location,
+      signatureBase64,
+      this.actionNote || "Đã hoàn tất",
     );
+
+    this.isCompleting.set(false);
   }
 
   getStatusLabel(status: OrderStatus): string {

@@ -1,38 +1,73 @@
 // const multer = require("multer");
 // const path = require("path");
 // const fs = require("fs");
+// require("dotenv").config();
 
-// const storage = multer.diskStorage({
-//   destination: function (req, file, cb) {
-//     const now = new Date();
-//     const year = now.getFullYear();
-//     const month = String(now.getMonth() + 1).padStart(2, "0");
+// const MAX_UPLOAD_SIZE =
+//   parseInt(process.env.MAX_UPLOAD_SIZE) || 5 * 1024 * 1024;
 
-//     const uploadPath = path.join(__dirname, "../uploads", year.toString(), month);
+// const allowedMimeTypes = [
+//   "application/pdf",
+//   "application/msword",
+//   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+//   "image/jpeg",
+//   "image/png",
+//   "image/webp",
+//   "image/jpg",
+// ];
 
-//     fs.mkdirSync(uploadPath, { recursive: true });
+// const fileFilter = (req, file, cb) => {
+//   if (allowedMimeTypes.includes(file.mimetype)) {
+//     cb(null, true);
+//   } else {
+//     cb(new Error("Chỉ được upload PDF, Word hoặc hình ảnh!"), false);
+//   }
+// };
 
-//     cb(null, uploadPath);
-//   },
+// function createUploader(baseFolder) {
+//   const storage = multer.diskStorage({
+//     destination: function (req, file, cb) {
+//       const now = new Date();
+//       const year = now.getFullYear();
+//       const month = String(now.getMonth() + 1).padStart(2, "0");
 
-//   filename: function (req, file, cb) {
-//     const uniqueName =
-//       Date.now() + "-" + Math.round(Math.random() * 1e9);
+//       const uploadPath = path.join(
+//         __dirname,
+//         "../uploads",
+//         baseFolder,
+//         year.toString(),
+//         month
+//       );
 
-//     cb(null, uniqueName + path.extname(file.originalname));
-//   },
-// });
+//       fs.mkdirSync(uploadPath, { recursive: true });
 
-// const upload = multer({ storage });
+//       cb(null, uploadPath);
+//     },
 
-// module.exports = upload;
+//     filename: function (req, file, cb) {
+//       const uniqueName =
+//         Date.now() + "-" + Math.round(Math.random() * 1e9);
+
+//       cb(null, uniqueName + path.extname(file.originalname));
+//     },
+//   });
+
+//   return multer({
+//     storage,
+//     limits: { fileSize: MAX_UPLOAD_SIZE },
+//     fileFilter,
+//   });
+// }
+
+// module.exports = createUploader;
 
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 require("dotenv").config();
 
-const MAX_UPLOAD_SIZE = parseInt(process.env.MAX_UPLOAD_SIZE) || 5 * 1024 * 1024;
+const MAX_UPLOAD_SIZE =
+  parseInt(process.env.MAX_UPLOAD_SIZE) || 5 * 1024 * 1024;
 
 const allowedMimeTypes = [
   "application/pdf",
@@ -52,33 +87,43 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
+function createUploader({ folder, getFileName }) {
+  const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
 
-    const uploadPath = path.join(__dirname, "../uploads", year.toString(), month);
+      const uploadPath = path.join(
+        __dirname,
+        "../uploads",
+        folder,
+        year.toString(),
+        month
+      );
 
-    fs.mkdirSync(uploadPath, { recursive: true });
+      fs.mkdirSync(uploadPath, { recursive: true });
 
-    cb(null, uploadPath);
-  },
+      cb(null, uploadPath);
+    },
 
-  filename: function (req, file, cb) {
-    const uniqueName =
-      Date.now() + "-" + Math.round(Math.random() * 1e9);
+    filename: function (req, file, cb) {
+      if (getFileName) {
+        return cb(null, getFileName(req, file));
+      }
 
-    cb(null, uniqueName + path.extname(file.originalname));
-  },
-});
+      const uniqueName =
+        Date.now() + "-" + Math.round(Math.random() * 1e9);
 
-const upload = multer({
-  storage,
-  limits: {
-    fileSize: MAX_UPLOAD_SIZE,
-  },
-  fileFilter, 
-});
+      cb(null, uniqueName + path.extname(file.originalname));
+    },
+  });
 
-module.exports = upload;
+  return multer({
+    storage,
+    limits: { fileSize: MAX_UPLOAD_SIZE },
+    fileFilter,
+  });
+}
+
+module.exports = createUploader;
