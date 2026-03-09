@@ -94,158 +94,102 @@ export class OrderService {
 
   assignReceiver(
     id: number,
+    order_code: string,
     receiver_id: number,
     receiver_email: string,
     receiver_name: string,
   ) {
-    this.http
+    return this.http
       .post(`${this.API}/orders/${id}/assign`, {
+        order_code,
         receiver_id,
         receiver_email,
         receiver_name,
       })
-      .subscribe({
-        next: () => this.refreshOrders(),
-        error: (err) => console.error("Assign error:", err),
-      });
+      .pipe(tap(() => this.refreshOrders()));
   }
 
-  // shipperAccept(id: number, missingDocs?: string) {
-  //   this.http
-  //     .post(`${this.API}/orders/${id}/accept`, {
-  //       missingDocs,
-  //     })
-  //     .subscribe({
-  //       next: () => this.refreshOrders(),
-  //       error: (err) => console.error("Accept error:", err),
-  //     });
-  // }
-
   shipperAccept(id: number, checklist: any[], missingDocs?: string) {
-    this.http
+    return this.http
       .post(`${this.API}/orders/${id}/accept`, {
         checklist,
         missingDocs,
       })
-      .subscribe({
-        next: () => this.refreshOrders(),
-        error: (err) => console.error("Accept error:", err),
-      });
+      .pipe(tap(() => this.refreshOrders()));
   }
 
   shipperReject(id: number, reason: string) {
-    this.http
+    return this.http
       .post(`${this.API}/orders/${id}/shipper-reject`, {
         reason,
       })
-      .subscribe({
-        next: () => this.refreshOrders(),
-        error: (err) => console.error("Shipper reject error:", err),
-      });
+      .pipe(tap(() => this.refreshOrders()));
   }
-
-  // shipperComplete(
-  //   id: number,
-  //   images: string[],
-  //   location: LocationData,
-  //   signature: string,
-  //   note: string,
-  // ) {
-  //   this.http
-  //     .post(`${this.API}/orders/${id}/shipper-complete`, {
-  //       images,
-  //       location,
-  //       signature,
-  //       note,
-  //     })
-  //     .subscribe({
-  //       next: () => this.refreshOrders(),
-  //       error: (err) => console.error("Shipper complete error:", err),
-  //     });
-  // }
 
   shipperComplete(
     id: number,
     files: File[],
     location: LocationData,
-    signature: string,
+    signature: File,
     note: string,
   ) {
     const formData = new FormData();
 
-    files.forEach((file) => {
-      formData.append("files", file);
-    });
+    files.forEach((file) => formData.append("files", file));
 
-    formData.append("note", note);
     formData.append("signature", signature);
+    formData.append("note", note);
     formData.append("location", JSON.stringify(location));
 
-    this.http
-      .post(`${this.API}/orders/${id}/shipper-complete`, formData)
-      .subscribe({
-        next: () => this.refreshOrders(),
-        error: (err) => console.error("Shipper complete error:", err),
-      });
+    return this.http.post(
+      `${this.API}/orders/${id}/shipper-complete`,
+      formData,
+    );
   }
 
   shipperReturnSupplement(id: number, note: string) {
-    this.http
+    return this.http
       .post(`${this.API}/orders/${id}/shipper-return-supplement`, {
         note,
       })
-      .subscribe({
-        next: () => this.refreshOrders(),
-        error: (err) => console.error("Return supplement error:", err),
-      });
+      .pipe(tap(() => this.refreshOrders()));
   }
 
   rejectOrder(id: number, reason: string) {
-    this.http
+    return this.http
       .post(`${this.API}/orders/${id}/reject`, {
         reason,
       })
-      .subscribe({
-        next: () => this.refreshOrders(),
-        error: (err) => console.error("Reject error:", err),
-      });
+      .pipe(tap(() => this.refreshOrders()));
   }
 
   completeOrder(id: number) {
-    this.http.post(`${this.API}/orders/${id}/complete`, {}).subscribe({
-      next: () => this.refreshOrders(),
-      error: (err) => console.error("Complete error:", err),
-    });
+    return this.http
+      .post(`${this.API}/orders/${id}/complete`, {})
+      .pipe(tap(() => this.refreshOrders()));
   }
 
   adminFinalize(id: number, approved: boolean, reason?: string) {
-    this.http
+    return this.http
       .post(`${this.API}/orders/${id}/finalize`, {
         approved,
         reason,
       })
-      .subscribe({
-        next: () => this.refreshOrders(),
-        error: (err) => console.error("Finalize error:", err),
-      });
+      .pipe(tap(() => this.refreshOrders()));
   }
 
   deleteOrder(id: number) {
-    this.http.delete(`${this.API}/orders/${id}`).subscribe({
-      next: () => this.refreshOrders(),
-      error: (err) => console.error("Delete error:", err),
-    });
+    return this.http
+      .delete(`${this.API}/orders/${id}`)
+      .pipe(tap(() => this.refreshOrders()));
   }
 
   qlRequestSupplement(id: number, note: string) {
-    this.http
+    return this.http
       .post(`${this.API}/orders/${id}/request-supplement`, {
-        note: note,
+        note,
       })
-      .subscribe({
-        next: () => this.refreshOrders(),
-        error: (err) => console.error("Request supplement error:", err),
-      });
+      .pipe(tap(() => this.refreshOrders()));
   }
 
   updateOrderSort(userId: number, orderIds: string[]) {
@@ -288,7 +232,7 @@ export class OrderService {
   }
 
   requestInfo(orderId: number, note: string) {
-    this.qlRequestSupplement(orderId, note);
+    return this.qlRequestSupplement(orderId, note);
   }
 
   setShipperHighlightColor(
@@ -307,6 +251,7 @@ export class OrderService {
         }),
       );
   }
+
   getShippers() {
     this.authService.getUsers("NVGN");
     return this.authService.users;

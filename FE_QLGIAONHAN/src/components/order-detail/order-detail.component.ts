@@ -13,7 +13,7 @@ import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { AuthService, User } from "../../services/auth.service";
+import { AuthService } from "../../services/auth.service";
 import { OrderService } from "../../services/order.service";
 import {
   Attachment,
@@ -21,11 +21,13 @@ import {
   Order,
   OrderStatus,
 } from "../../type/models";
+import { UsersService } from "../../services/users.service";
+import { ToastComponent } from "../../app/shared/toast/toast.component";
 
 @Component({
   selector: "app-order-detail",
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ToastComponent],
   template: `
     <div
       class="fixed inset-0 z-50 overflow-y-auto"
@@ -494,9 +496,19 @@ import {
                         d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
                       />
                     </svg>
-                    Tọa độ:
-                    {{ order().deliveryLocation?.lat | number: "1.4-4" }},
-                    {{ order().deliveryLocation?.lng | number: "1.4-4" }}
+                    Giao tại:
+                    <a
+                      [href]="
+                        'https://www.google.com/maps?q=' +
+                        order().deliveryLocation?.lat +
+                        ',' +
+                        order().deliveryLocation?.lng
+                      "
+                      target="_blank"
+                      class="ml-1 text-blue-600 hover:underline"
+                    >
+                      Xem vị trí trên Google Maps
+                    </a>
                   </div>
                 }
 
@@ -661,7 +673,7 @@ import {
                         transition"
                     >
                       <option value="">Chọn người nhận</option>
-                      @for (s of shippers(); track s.email) {
+                      @for (s of shippers; track s.email) {
                         <option [value]="s.email">{{ s.name }}</option>
                       }
                     </select>
@@ -722,7 +734,7 @@ import {
             <button
               type="button"
               (click)="close.emit()"
-              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+              class="mt-3 mr-2 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
             >
               Đóng
             </button>
@@ -791,9 +803,11 @@ import {
           <!-- Missing Docs Warning Modal -->
           @if (showMissingAlert()) {
             <div
-              class="absolute inset-0 z-20 flex items-center justify-center p-4 bg-gray-500 bg-opacity-90"
+              class="absolute inset-0 z-20 flex items-center justify-center p-4 bg-gray-500 bg-opacity-90 overflow-y-auto"
             >
-              <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+              <div
+                class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto"
+              >
                 <div class="text-center mb-4">
                   <div
                     class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100"
@@ -1082,18 +1096,21 @@ import {
           </div>
         </div>
       </div>
+      <app-toast></app-toast>
     </div>
   `,
 })
 export class OrderDetailComponent implements OnInit {
+  @ViewChild(ToastComponent) toast!: ToastComponent;
   order = input.required<Order>();
   @Output() close = new EventEmitter<void>();
   @Output() edit = new EventEmitter<Order>();
 
   orderService = inject(OrderService);
   authService = inject(AuthService);
+  userService = inject(UsersService);
 
-  shippers = this.orderService.getShippers();
+  shippers: any[] = [];
 
   showRequestInput = signal(false);
   showRejectInput = signal(false);
@@ -1129,6 +1146,10 @@ export class OrderDetailComponent implements OnInit {
     } else {
       this.localAttachments.set([]);
     }
+
+    this.userService.getShippers().subscribe((data) => {
+      this.shippers = data;
+    });
   }
 
   isChecklistActive() {
@@ -1225,7 +1246,14 @@ export class OrderDetailComponent implements OnInit {
 
       this.commitChecklist();
       this.close.emit();
-      this.orderService.shipperAccept(this.order().id, checklist);
+      this.orderService.shipperAccept(this.order().id, checklist).subscribe({
+        next: () => {
+          this.toast.show("Nhận yêu cầu giao nhận thành công", "success");
+        },
+        error: () => {
+          this.toast.show("Nhận yêu cầu giao nhận thất bại", "error");
+        },
+      });
     }
   }
 
@@ -1250,10 +1278,19 @@ export class OrderDetailComponent implements OnInit {
     this.commitChecklist();
     const missingStr = this.getMissingItemsString();
     this.close.emit();
-    this.orderService.requestInfo(
-      this.order().id,
-      `Thiếu hồ sơ: ${missingStr}. Yêu cầu bổ sung.`,
-    );
+    this.orderService
+      .requestInfo(
+        this.order().id,
+        `Thiếu hồ sơ: ${missingStr}. Yêu cầu bổ sung.`,
+      )
+      .subscribe({
+        next: () => {
+          this.toast.show("Đã gửi yêu cầu bổ sung hồ sơ", "success");
+        },
+        error: () => {
+          this.toast.show("Gửi yêu cầu bổ sung thất bại", "error");
+        },
+      });
     this.showMissingAlert.set(false);
   }
 
@@ -1267,7 +1304,7 @@ export class OrderDetailComponent implements OnInit {
     if (this.currentUserRole() === "IT") return true;
     return (
       this.currentUserRole() === "NVADMIN" &&
-      (this.order().status === "PENDING" || this.order().status === "COMPLETED")
+      (this.order().status === "PENDING")
     );
   }
 
@@ -1300,8 +1337,15 @@ export class OrderDetailComponent implements OnInit {
 
   confirmDeleteDetail() {
     if (confirm(`Bạn có chắc muốn xóa yêu cầu ${this.order().id}?`)) {
-      this.close.emit();
-      this.orderService.deleteOrder(this.order().id);
+      this.orderService.deleteOrder(this.order().id).subscribe({
+        next: () => {
+          this.toast.show("Đã xóa yêu cầu giao nhận", "success");
+          this.close.emit();
+        },
+        error: () => {
+          this.toast.show("Xóa yêu cầu thất bại", "error");
+        },
+      });
     }
   }
 
@@ -1327,25 +1371,47 @@ export class OrderDetailComponent implements OnInit {
 
   assign(email: string) {
     if (!email) return;
-    const shipper = this.shippers().find((s) => s.email === email);
-    console.log("Assigning to:", shipper);
+
+    const shipper = this.shippers.find((s) => s.email === email);
+
     if (shipper) {
-      this.close.emit();
-      this.orderService.assignReceiver(
-        this.order().id,
-        shipper.id,
-        shipper.email,
-        shipper.name,
-      );
+      this.orderService
+        .assignReceiver(
+          this.order().id,
+          this.order().orderCode,
+          shipper.id,
+          shipper.email,
+          shipper.name,
+        )
+        .subscribe({
+          next: () => {
+            this.toast.show("Đã phân công nhân viên giao nhận", "success");
+            this.close.emit();
+          },
+          error: () => {
+            this.toast.show("Phân công nhân viên thất bại", "error");
+          },
+        });
     }
   }
 
   submitRequest() {
     const note = this.actionNote.trim();
     if (!note) return;
-    this.close.emit();
-    this.orderService.requestInfo(this.order().id, note);
-    this.showRequestInput.set(false);
+
+    this.orderService.requestInfo(this.order().id, note).subscribe({
+      next: () => {
+        this.toast.show("Đã gửi yêu cầu bổ sung thông tin", "success");
+
+        setTimeout(() => {
+          this.close.emit();
+          this.showRequestInput.set(false);
+        }, 300); // delay 300ms
+      },
+      error: () => {
+        this.toast.show("Gửi yêu cầu bổ sung thất bại", "error");
+      },
+    });
   }
 
   submitResolve() {
@@ -1367,41 +1433,69 @@ export class OrderDetailComponent implements OnInit {
   submitReject() {
     const note = this.actionNote.trim();
     if (!note) return;
-    this.close.emit();
-    this.orderService.shipperReject(this.order().id, note);
-    this.showRejectInput.set(false);
+
+    this.orderService.shipperReject(this.order().id, note).subscribe({
+      next: () => {
+        this.toast.show("Đã từ chối yêu cầu giao nhận", "success");
+        this.close.emit();
+        this.showRejectInput.set(false);
+      },
+      error: () => {
+        this.toast.show("Từ chối yêu cầu thất bại", "error");
+      },
+    });
   }
 
   finalizeAdmin(approved: boolean) {
     const note = this.actionNote.trim();
+
     if (!approved && !note) {
       alert("Vui lòng nhập lý do không duyệt!");
       return;
     }
-    this.close.emit();
-    this.orderService.adminFinalize(this.order().id, approved, note);
-    this.showAdminRejectInput.set(false);
-    this.actionNote = "";
+
+    this.orderService.adminFinalize(this.order().id, approved, note).subscribe({
+      next: () => {
+        if (approved) {
+          this.toast.show("Đã duyệt hoàn tất yêu cầu giao nhận", "success");
+        } else {
+          this.toast.show("Đã từ chối duyệt yêu cầu", "success");
+        }
+
+        this.close.emit();
+        this.showAdminRejectInput.set(false);
+        this.actionNote = "";
+      },
+      error: () => {
+        this.toast.show("Xử lý yêu cầu thất bại", "error");
+      },
+    });
   }
 
   onFileSelected(event: any) {
     const files = event.target.files;
+
     if (files && files.length) {
       const remainingSlots = 10 - this.previewImages().length;
       const count = Math.min(files.length, remainingSlots);
 
       for (let i = 0; i < count; i++) {
+        const file = files[i];
+
+        this.selectedFiles.update((f) => [...f, file]);
+
         const reader = new FileReader();
         reader.onload = (e: any) => {
           this.previewImages.update((imgs) => [...imgs, e.target.result]);
         };
-        reader.readAsDataURL(files[i]);
+        reader.readAsDataURL(file);
       }
     }
   }
 
   removeImage(index: number) {
     this.previewImages.update((imgs) => imgs.filter((_, i) => i !== index));
+    this.selectedFiles.update((files) => files.filter((_, i) => i !== index));
   }
 
   openCompleteModal() {
@@ -1499,47 +1593,6 @@ export class OrderDetailComponent implements OnInit {
 
   selectedFiles = signal<File[]>([]);
 
-  // previewImages = signal<string[]>([]);
-
-  // submitComplete() {
-  //   if (!this.canSubmitDone()) return;
-
-  //   this.isCompleting.set(true);
-  //   this.locationError.set("");
-
-  //   if (!navigator.geolocation) {
-  //     this.locationError.set("Trình duyệt không hỗ trợ Geolocation.");
-  //     this.isCompleting.set(false);
-  //     return;
-  //   }
-
-  //   navigator.geolocation.getCurrentPosition(
-  //     (position) => {
-  //       const location = {
-  //         lat: position.coords.latitude,
-  //         lng: position.coords.longitude,
-  //       };
-
-  //       const signatureBase64 = this.canvasEl.nativeElement.toDataURL();
-
-  //       this.close.emit();
-  //       this.orderService.shipperComplete(
-  //         this.order().id,
-  //         this.selectedFiles(),
-  //         location,
-  //         signatureBase64,
-  //         this.actionNote || "Đã hoàn tất",
-  //       );
-  //       this.isCompleting.set(false);
-  //     },
-  //     (error) => {
-  //       this.isCompleting.set(false);
-  //       this.locationError.set("Bắt buộc bật GPS để hoàn tất.");
-  //     },
-  //     { timeout: 10000, enableHighAccuracy: true },
-  //   );
-  // }
-
   submitComplete() {
     if (!this.canSubmitDone()) return;
 
@@ -1551,18 +1604,39 @@ export class OrderDetailComponent implements OnInit {
       lng: 106.7009,
     };
 
-    const signatureBase64 = this.canvasEl.nativeElement.toDataURL();
+    this.canvasEl.nativeElement.toBlob((blob: Blob | null) => {
+      if (!blob) {
+        this.locationError.set("Không thể tạo chữ ký.");
+        this.isCompleting.set(false);
+        this.toast.show("Không thể tạo chữ ký.");
+        return;
+      }
 
-    this.close.emit();
-    this.orderService.shipperComplete(
-      this.order().id,
-      this.selectedFiles(),
-      location,
-      signatureBase64,
-      this.actionNote || "Đã hoàn tất",
-    );
+      const signatureFile = new File([blob], "signature.png", {
+        type: "image/png",
+      });
 
-    this.isCompleting.set(false);
+      this.orderService
+        .shipperComplete(
+          this.order().id,
+          this.selectedFiles(),
+          location,
+          signatureFile,
+          this.actionNote || "Đã hoàn tất",
+        )
+        .subscribe({
+          next: () => {
+            this.orderService.refreshOrders();
+            this.close.emit();
+            this.isCompleting.set(false);
+            this.toast.show("Hoàn tất giao nhận thành công", "success");
+          },
+          error: () => {
+            this.isCompleting.set(false);
+            this.toast.show("Hoàn tất giao nhận thất bại", "error");
+          },
+        });
+    });
   }
 
   getStatusLabel(status: OrderStatus): string {

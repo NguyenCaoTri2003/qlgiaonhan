@@ -99,7 +99,7 @@ exports.searchNhigiaCompanies = async (req, res) => {
 
   try {
     const response = await axios.post(
-      "https://demoapi.nhigia.vn/quanli/apigiaonhan/apigiaonhan.php",
+       process.env.API_URL,
       {
         action: "get_congty",
         tencongty: keyword,
@@ -192,7 +192,7 @@ exports.searchNhigiaCompanies = async (req, res) => {
 //     }
 
 //     const response = await axios.post(
-//       "https://demoapi.nhigia.vn/quanli/apigiaonhan/apigiaonhan.php",
+//        process.env.API_URL,
 //       {
 //         action: "get_congty",
 //         tencongty: keyword,

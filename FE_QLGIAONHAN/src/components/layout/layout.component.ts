@@ -121,10 +121,18 @@ import { Router } from "@angular/router";
                 {{ getRoleName(user()?.role) }}
               </div>
             </div>
-            <img
-              [src]="user()?.avatar"
-              class="h-8 w-8 rounded-full border-2 border-white"
-            />
+            <div class="avatar-ring">
+              @if (user()?.avatar) {
+                <img [src]="user()?.avatar" class="avatar-img" />
+              } @else {
+                <div
+                  class="avatar-fallback"
+                  [ngClass]="getAvatarColor(user()?.name)"
+                >
+                  {{ getInitial(user()?.name) }}
+                </div>
+              }
+            </div>
           </div>
         </div>
       </header>
@@ -317,7 +325,6 @@ import { Router } from "@angular/router";
             <button
               (click)="onLogout()"
               class="flex items-center w-full text-gray-600 hover:text-red-600 transition-colors"
-
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -377,7 +384,32 @@ export class LayoutComponent {
   unreadCount = this.notificationService.unreadCount;
 
   showNotif = signal(false);
-  isSidebarOpen = signal(false); 
+  isSidebarOpen = signal(false);
+
+  getInitial(name?: string): string {
+    if (!name) return "?";
+    return name.trim().charAt(0).toUpperCase();
+  }
+
+  ngOnInit() {
+    this.notificationService.loadNotifications();
+  }
+
+  getAvatarColor(name?: string) {
+    const colors = [
+      "bg-red-500",
+      "bg-blue-500",
+      "bg-green-500",
+      "bg-purple-500",
+      "bg-pink-500",
+      "bg-orange-500",
+    ];
+
+    if (!name) return colors[0];
+
+    const index = name.charCodeAt(0) % colors.length;
+    return colors[index];
+  }
 
   toggleNotif() {
     this.showNotif.update((v) => !v);
@@ -386,7 +418,6 @@ export class LayoutComponent {
   toggleSidebar() {
     this.isSidebarOpen.update((v) => !v);
   }
-
 
   isActive(path: string): boolean {
     return this.router.url === "/" + path;

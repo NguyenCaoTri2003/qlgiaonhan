@@ -1,7 +1,8 @@
+const callNhiGia = require("../utils/callNhiGia");
+
 const axios = require("axios");
 
-const NHIGIA_API =
-  "https://demoapi.nhigia.vn/quanli/apigiaonhan/apigiaonhan.php";
+const NHIGIA_API = process.env.API_URL|| "https://demoapi.nhigia.vn/quanli/apigiaonhan/apigiaonhan.php";
 
 exports.fetchNhigiaOrders = async () => {
   const response = await axios.post(
@@ -32,6 +33,10 @@ exports.fetchNhigiaUsers = async () => {
   return response.data;
 };
 
+exports.fetchNhigiaDepartments = async (token) => {
+  return callNhiGia("get_bophan", token);
+};
+ 
 exports.fetchNhigiaAttachmentsByDepartment = async (departmentId) => {
   try {
     const response = await axios.post(
@@ -95,5 +100,33 @@ exports.fetchNhigiaVisaVNTypeDetails = async (departmentId, typeId, detailId) =>
   } catch (error) {
     console.error("Fetch Nhị Gia Attachments Error:", error.message);
     return [];
+  }
+};
+
+exports.fetchNhigiaAdmins = async (action, token, page = 1, limit = 1000) => {
+  try {
+    const result = await callNhiGia(action, token, {
+      page,
+      limit,
+    });
+
+    return result?.data || null;
+  } catch (error) {
+    console.error("Fetch Nhị Gia Admin Error:", error.message);
+    return null;
+  }
+};
+
+exports.fetchNhigiaShippers = async (action, token, page = 1, limit = 1000) => {
+  try {
+    const result = await callNhiGia(action, token, {
+      page,
+      limit,
+    });
+
+    return result?.data || null;
+  } catch (error) {
+    console.error("Fetch Nhị Gia Admin Error:", error.message);
+    return null;
   }
 };

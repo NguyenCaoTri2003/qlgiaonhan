@@ -107,7 +107,7 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
             <option value="">Tất cả Bộ phận</option>
 
             @for (dept of departmentService.departments(); track dept.id) {
-              <option [value]="dept.code">
+              <option [value]="dept.id">
                 {{ dept.name }}
               </option>
             }
@@ -204,7 +204,7 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
                 <div
                   [class]="
                     'absolute left-0 top-0 bottom-0 w-1 ' +
-                    getDeptColorClass(order.department.code)
+                    getDeptColorClass(order.department?.code || '')
                   "
                 ></div>
 
@@ -217,9 +217,9 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
                     <span
                       [class]="
                         'text-[10px] font-bold uppercase tracking-wide ' +
-                        getDeptTextColorClass(order.department.code)
+                        getDeptTextColorClass(order.department?.code || '')
                       "
-                      >{{ order.department.name || "Không rõ phòng ban" }}</span
+                      >{{ order.department?.name || "Không rõ phòng ban" }}</span
                     >
                   </div>
                   <div class="flex flex-col items-end gap-2 shrink-0 ml-2">
@@ -379,10 +379,10 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
                       <div
                         [class]="
                           'text-xs font-semibold mt-1 ' +
-                          getDeptTextColorClass(order.department.code)
-                        "
+                          getDeptTextColorClass(order.department?.code || '')
+                        " 
                       >
-                        {{ order.department.name || "Không rõ phòng ban" }}
+                        {{ order.department?.name || "Không rõ phòng ban" }}
                       </div>
                       <div class="text-xs text-gray-400 mt-1">
                         {{ order.date | date: "dd/MM" }} - {{ order.time }}
@@ -985,20 +985,6 @@ export class OrderListComponent {
     this.orderService.adminFinalize(o.id, false, this.actionReason);
   }
 
-  // assignOrder() {
-  //   const o = this.selectedActionOrder();
-  //   if (!o) return;
-  //   const shipper = prompt(
-  //     "Nhập email Shipper (VD: nvgiaonhan1@nhigia.vn):",
-  //     "nvgiaonhan1@nhigia.vn",
-  //   );
-  //   if (shipper) {
-  //     this.closeAction();
-  //     const name = shipper.includes("1") ? "Văn Giàu" : "Trung Hiếu";
-  //     this.orderService.assignReceiver(o.id,  shipper, shipper, name);
-  //   }
-  // }
-
   requestSupplementQL() {
     const o = this.selectedActionOrder();
     if (!o || !this.actionNote)
@@ -1011,7 +997,6 @@ export class OrderListComponent {
     const o = this.selectedActionOrder();
     if (!o) return;
     this.closeAction();
-    // this.orderService.shipperAccept(o.id);
   }
 
   rejectJob() {
@@ -1041,13 +1026,6 @@ export class OrderListComponent {
     };
     const imgs = ["image1.jpg", "image2.pdf"];
     this.closeAction();
-    // this.orderService.shipperComplete(
-    //   o.id,
-    //   imgs,
-    //   loc,
-    //   this.mockSignature,
-    //   this.actionNote || "Đã xong",
-    // );
   }
 
   onDrop(event: CdkDragDrop<Order[]>) {

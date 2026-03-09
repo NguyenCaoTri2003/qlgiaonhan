@@ -18,6 +18,8 @@ import {
   ReactiveFormsModule,
   Validators,
   FormsModule,
+  AbstractControl,
+  ValidationErrors,
 } from "@angular/forms";
 import { Attachment, Order, SENDERS } from "../../type/models";
 import { CustomerService } from "../../services/customer.service";
@@ -26,6 +28,7 @@ import { DepartmentService } from "../../services/department.service";
 import { OrderService } from "../../services/order.service";
 import { FormLabelComponent } from "../../app/shared/form-label.component";
 import { ToastComponent } from "../../app/shared/toast/toast.component";
+import { AuthService } from "../../services/auth.service";
 
 @Component({
   selector: "app-order-form",
@@ -109,38 +112,71 @@ import { ToastComponent } from "../../app/shared/toast/toast.component";
                 class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
               >
                 @for (dept of departments(); track dept.id) {
-                  <option [value]="dept.id">
+                  <option [ngValue]="dept.id">
                     {{ dept.name }}
                   </option>
                 }
               </select>
             </div>
-            <div>
+            <div class="relative sender-dropdown-wrapper">
               <app-form-label
                 label="Người giao"
                 [control]="form.get('senderName')"
                 [required]="true"
               ></app-form-label>
-              <div class="flex flex-col">
-                <select
-                  formControlName="senderName"
-                  (change)="onSenderChange()"
-                  class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
+
+              <input
+                type="text"
+                formControlName="senderName"
+                (input)="onSenderSearch($event); onSenderChange()"
+                (focus)="openSenderDropdown()"
+                class="w-full border rounded-md py-2 px-3 text-sm"
+                [class.border-red-500]="
+                  form.get('senderName')?.invalid &&
+                  form.get('senderName')?.touched
+                "
+                placeholder="Nhập tên người giao để tìm kiếm..."
+              />
+
+              @if (showSenderDropdown()) {
+                <div
+                  class="absolute z-50 bg-white border w-full max-h-60 overflow-y-auto shadow-lg rounded-md mt-1 text-sm"
+                  (scroll)="onSenderScroll($event)"
                 >
-                  <option value="">-- Chọn Người Giao --</option>
                   @for (sender of senders(); track sender.id) {
-                    <option [value]="sender.name">{{ sender.name }}</option>
+                    <div
+                      class="px-3 py-2 hover:bg-blue-50 cursor-pointer transition"
+                      (click)="selectSender(sender)"
+                    >
+                      <div class="font-medium text-[13px]">
+                        {{ sender.name }}
+                      </div>
+
+                      <div class="text-[11px] text-gray-500">
+                        {{ sender.email }}
+                      </div>
+                    </div>
                   }
-                </select>
-                @if (selectedSenderPhone()) {
-                  <a
-                    [href]="'tel:' + selectedSenderPhone()"
-                    class="text-xs text-blue-600 mt-1 font-medium flex items-center hover:underline"
-                  >
-                    📞 {{ selectedSenderPhone() }} (Bấm gọi ngay)
-                  </a>
-                }
-              </div>
+
+                  <!-- loading nằm trong dropdown -->
+                  @if (isLoadingSenders()) {
+                    <div
+                      class="text-center text-xs text-gray-500 py-2 border-t"
+                    >
+                      Đang tải thêm người giao...
+                    </div>
+                  }
+                </div>
+              }
+
+              @if (selectedSenderPhone()) {
+                <a
+                  [href]="'tel:' + selectedSenderPhone()"
+                  class="text-[11px] text-blue-600 mt-1 font-medium flex items-center hover:underline"
+                >
+                  📞 {{ selectedSenderPhone() }} (Bấm gọi ngay)
+                </a>
+              }
             </div>
           </div>
 
@@ -190,7 +226,9 @@ import { ToastComponent } from "../../app/shared/toast/toast.component";
             </div>
 
             <!-- Company -->
-            <div class="relative company-dropdown-wrapper">
+            <div
+              class="relative company-dropdown-wrapper sender-dropdown-wrapper"
+            >
               <app-form-label
                 label="Tên công ty / Khách hàng"
                 [control]="form.get('company')"
@@ -341,19 +379,27 @@ import { ToastComponent } from "../../app/shared/toast/toast.component";
               <input
                 type="time"
                 formControlName="time"
+                [min]="minTime"
                 class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
               />
+              @if (form.errors?.["pastDateTime"]) {
+                <p class="text-red-500 text-sm mt-1">
+                  Không được chọn thời gian trong quá khứ
+                </p>
+              }
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"
-                >Ngày
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Ngày
                 @if (isRequired("date")) {
                   <span class="text-red-500 ml-1">*</span>
                 }
               </label>
+
               <input
                 type="date"
                 formControlName="date"
+                [min]="today"
                 class="w-full border rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -701,6 +747,8 @@ import { ToastComponent } from "../../app/shared/toast/toast.component";
 })
 export class OrderFormComponent implements OnInit {
   @ViewChild(ToastComponent) toast!: ToastComponent;
+  today = new Date().toISOString().split("T")[0];
+  minTime = "";
 
   orderData = input<Order | null>(null);
   save = output<Partial<Order>>();
@@ -708,6 +756,7 @@ export class OrderFormComponent implements OnInit {
 
   private fb = inject(FormBuilder);
   private customerService = inject(CustomerService);
+  private authService = inject(AuthService);
 
   form!: FormGroup;
   customers = this.customerService.customers;
@@ -716,7 +765,7 @@ export class OrderFormComponent implements OnInit {
   departments = this.departmentService.departments;
 
   private usersService = inject(UsersService);
-  senders = signal<any[]>([]);
+  // senders = signal<any[]>([]);
 
   private orderService = inject(OrderService);
 
@@ -725,23 +774,38 @@ export class OrderFormComponent implements OnInit {
   selectedAttachments = signal<Map<string, number>>(new Map());
   isAutofilled = signal(false);
   selectedSenderPhone = signal("");
+  selectedSenderId = signal<number | null>(null);
 
   isEditMode = computed(() => !!this.orderData());
 
   private defaultDepartmentEffect = effect(() => {
     const list = this.departments();
     const isEdit = this.isEditMode();
+    const user = this.authService.currentUser();
 
-    if (!this.form || isEdit) return;
+    if (!this.form || isEdit || !list?.length) return;
 
-    if (list?.length && !this.form.get("department")?.value) {
-      const defaultDept = list.find((d: any) => Number(d.is_default) === 1);
+    if (user?.role === "NVADMIN" && user?.departmentId) {
+      const dept = list.find((d: any) => d.external_id === user.departmentId);
 
-      if (defaultDept) {
+      if (dept) {
         this.form.patchValue({
-          department: defaultDept.id,
+          department: dept.id,
         });
+
+        this.form.get("department")?.disable();
       }
+
+      return;
+    }
+
+    // mặc định theo is_default
+    const defaultDept = list.find((d: any) => Number(d.is_default) === 1);
+
+    if (defaultDept && !this.form.get("department")?.value) {
+      this.form.patchValue({
+        department: defaultDept.id,
+      });
     }
   });
 
@@ -760,7 +824,17 @@ export class OrderFormComponent implements OnInit {
   existingFiles = signal<any[]>([]);
   filesToDelete = signal<number[]>([]);
 
+  allSenders = signal<any[]>([]);
+  senders = signal<any[]>([]);
+  showSenderDropdown = signal(false);
+  senderKeyword = signal("");
+  senderPage = signal(1);
+  senderPageSize = 10;
+  isLoadingSenders = signal(false);
+
   private el = inject(ElementRef);
+
+  private clickListener!: (event: MouseEvent) => void;
 
   customAttachments = signal<{ name: string; qty: number; checked: boolean }[]>(
     [],
@@ -772,16 +846,28 @@ export class OrderFormComponent implements OnInit {
     return control.hasValidator(Validators.required);
   }
 
+  dateTimeValidator(control: AbstractControl): ValidationErrors | null {
+    const date = control.get("date")?.value;
+    const time = control.get("time")?.value;
+
+    if (!date || !time) return null;
+
+    const selected = new Date(`${date}T${time}`);
+    const now = new Date();
+
+    if (selected <= now) {
+      return { pastDateTime: true };
+    }
+
+    return null;
+  }
+
   ngOnInit() {
     const data = this.orderData();
 
     if (data && data.attachments) {
       this.customAttachments.set(data.attachments.map((a) => ({ ...a })));
     }
-
-    // if (data && data.uploadedFiles) {
-    //   this.uploadedFileList.set([...(data.uploadedFiles as any)]);
-    // }
 
     if (data && data.uploadedFiles) {
       this.existingFiles.set([...(data.uploadedFiles as any)]);
@@ -809,6 +895,17 @@ export class OrderFormComponent implements OnInit {
       amountUSD: [data?.amountUSD ? this.formatNumber(data.amountUSD) : ""],
     });
 
+    this.form.get("date")?.valueChanges.subscribe((date) => {
+      const today = new Date().toISOString().split("T")[0];
+
+      if (date === today) {
+        const now = new Date();
+        this.minTime = now.toTimeString().slice(0, 5);
+      } else {
+        this.minTime = "";
+      }
+    });
+
     this.form.get("addressLine")?.valueChanges.subscribe((val) => {
       if (!val) {
         this.googleMapLink.set("");
@@ -821,8 +918,9 @@ export class OrderFormComponent implements OnInit {
       );
     });
 
-    this.usersService.getSenders().subscribe((res) => {
-      this.senders.set(res);
+    this.usersService.getAdmins().subscribe((res) => {
+      this.allSenders.set(res);
+      this.senders.set(res.slice(0, 10));
     });
 
     this.departmentService.loadDepartments();
@@ -924,6 +1022,91 @@ export class OrderFormComponent implements OnInit {
           this.customAttachments.set(mapped);
         });
     });
+
+    this.clickListener = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+
+      const clickedCompanyDropdown = target.closest(
+        ".company-dropdown-wrapper",
+      );
+      const clickedSenderDropdown = target.closest(".sender-dropdown-wrapper");
+
+      if (!clickedCompanyDropdown) {
+        this.showDropdown.set(false);
+      }
+
+      if (!clickedSenderDropdown) {
+        this.showSenderDropdown.set(false);
+      }
+    };
+
+    document.addEventListener("click", this.clickListener, true);
+  }
+
+  ngOnDestroy() {
+    document.removeEventListener("click", this.clickListener, true);
+  }
+
+  onSenderSearch(event: any) {
+    const keyword = event.target.value.toLowerCase();
+
+    this.senderKeyword.set(keyword);
+
+    const filtered = this.allSenders().filter((u) =>
+      u.name.toLowerCase().includes(keyword),
+    );
+
+    this.senders.set(filtered.slice(0, 20));
+  }
+
+  openSenderDropdown() {
+    this.showSenderDropdown.set(true);
+
+    this.senderPage.set(1);
+
+    const list = this.allSenders().slice(0, this.senderPageSize);
+    this.senders.set(list);
+  }
+
+  selectSender(sender: any) {
+    this.form.patchValue({
+      senderName: sender.name,
+    });
+
+    this.selectedSenderPhone.set(sender.phone || "");
+    this.selectedSenderId.set(sender.id);
+    this.showSenderDropdown.set(false);
+  }
+
+  loadMoreSenders() {
+    if (this.isLoadingSenders()) return;
+
+    const page = this.senderPage() + 1;
+    const start = (page - 1) * this.senderPageSize;
+    const end = start + this.senderPageSize;
+
+    const more = this.allSenders().slice(start, end);
+
+    if (more.length === 0) return;
+
+    this.isLoadingSenders.set(true);
+
+    setTimeout(() => {
+      this.senders.set([...this.senders(), ...more]);
+      this.senderPage.set(page);
+      this.isLoadingSenders.set(false);
+    }, 200);
+  }
+
+  onSenderScroll(event: any) {
+    const element = event.target;
+
+    const atBottom =
+      element.scrollTop + element.clientHeight >= element.scrollHeight - 10;
+
+    if (atBottom) {
+      this.loadMoreSenders();
+    }
   }
 
   loadCompanies() {
@@ -993,14 +1176,6 @@ export class OrderFormComponent implements OnInit {
     this.showDropdown.set(false);
   }
 
-  @HostListener("document:click", ["$event"])
-  onClickOutside(event: Event) {
-    const target = event.target as HTMLElement;
-    if (!target.closest(".company-dropdown-wrapper")) {
-      this.showDropdown.set(false);
-    }
-  }
-
   onProvinceChange(event: any) {
     this.form.get("district")?.setValue("");
   }
@@ -1010,7 +1185,16 @@ export class OrderFormComponent implements OnInit {
   onSenderChange() {
     const name = this.form.get("senderName")?.value;
     const sender = this.senders().find((s) => s.name === name);
-    this.selectedSenderPhone.set(sender ? sender.phone : "");
+
+    if (sender) {
+      this.selectedSenderPhone.set(sender.phone);
+      this.selectedSenderId.set(sender.id);
+    } else {
+      this.selectedSenderPhone.set("");
+      this.selectedSenderId.set(null);
+    }
+
+    // this.selectedSenderPhone.set(sender ? sender.phone : "");
   }
 
   onCompanyChange() {
@@ -1137,7 +1321,7 @@ export class OrderFormComponent implements OnInit {
   onSubmit() {
     if (this.form.invalid) return;
 
-    const formVal = this.form.value;
+    const formVal = this.form.getRawValue();
 
     const dept = this.departments().find(
       (d: any) => d.id == formVal.department,
@@ -1162,7 +1346,7 @@ export class OrderFormComponent implements OnInit {
     const payload: any = {
       department_id: formVal.department,
       external_department_id: dept?.external_id ?? null,
-
+      external_sender_id: this.selectedSenderId(),
       external_visa_type_id: formVal.visaType1 ?? null,
       external_visa_detail_id: formVal.visaType2 ?? null,
       sender_name: formVal.senderName,
@@ -1231,7 +1415,13 @@ export class OrderFormComponent implements OnInit {
         },
         error: (err) => {
           console.error(err);
-          this.toast.show("Có lỗi khi tạo yêu cầu giao nhận", "error");
+
+          const message = err?.error?.message;
+
+          this.toast.show(
+            "Có lỗi khi tạo yêu cầu giao nhận: " + message,
+            "error",
+          );
         },
       });
     }

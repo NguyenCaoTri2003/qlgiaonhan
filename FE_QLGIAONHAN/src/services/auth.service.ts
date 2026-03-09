@@ -1,15 +1,6 @@
 import { Injectable, signal, computed } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
-
-export type UserRole = "QL" | "NVADMIN" | "NVGN" | "IT";
-
-export interface User {
-  id: number;
-  email: string;
-  name: string;
-  role: UserRole;
-  avatar?: string;
-}
+import { User, UserRole } from "../type/models";
 
 @Injectable({
   providedIn: "root",

@@ -30,12 +30,14 @@ export interface LocationData {
 }
 
 export interface ActivityLog {
+  id: number,
   timestamp: number;
   userEmail: string;
   userName: string;
   action: string;
   orderId: string;
   details: string;
+  orderCode: string
 }
 
 export interface Notification {
@@ -114,4 +116,15 @@ export interface Order {
   shipperHighlightColor?: 'red' | 'blue' | 'yellow' | null;
   updatedAt: number;
   files?: { id: number; fileName: string; filePath: string, originalName: string }[];
+}
+
+export type UserRole = "QL" | "NVADMIN" | "NVGN" | "IT";
+
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+  role: UserRole;
+  avatar?: string;
+  departmentId?: number;
 }

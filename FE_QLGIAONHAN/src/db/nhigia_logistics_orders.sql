@@ -46,7 +46,7 @@ CREATE TABLE `nhigia_logistics_orders` (
  `current_step` varchar(50) DEFAULT NULL, -- Bước hiện tại của quy trình giao nhận
  `external_department_id` int(11) DEFAULT NULL, -- ID phòng ban từ hệ thống bên ngoài 
  `external_company_id` int(11) DEFAULT NULL, -- ID công ty từ hệ thống bên ngoài
- `external_sender_id` int(11) DEFAULT NULL, -- ID người gửi từ hệ thống bên ngoài
+ `external_sender_id` int(11) DEFAULT NULL, -- ID người giao từ hệ thống bên ngoài
  `external_status` varchar(20) DEFAULT NULL, -- Trạng thái yêu cầu giao nhận từ hệ thống bên ngoài
  `external_status_text` varchar(100) DEFAULT NULL, -- Mô tả trạng thái yêu cầu giao nhận từ hệ thống bên ngoài
  `shipper_id` int(11) DEFAULT NULL, -- ID shipper được phân công

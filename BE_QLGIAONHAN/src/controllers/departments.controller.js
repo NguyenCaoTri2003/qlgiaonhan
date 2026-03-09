@@ -1,13 +1,49 @@
 const pool = require("../config/database");
 const nhigiaService = require("../services/nhigia.service");
 
+// exports.getDepartment = async (req, res) => {
+//   try {
+//     const [rows] = await pool.query(
+//       "SELECT * FROM nhigia_logistics_departments ORDER BY created_at DESC"
+//     );
+
+//     res.json(rows);
+
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
 exports.getDepartment = async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "SELECT * FROM nhigia_logistics_departments ORDER BY created_at DESC"
-    );
+    const token = req.user?.nhigia_token;
+    const departmentId = req.user?.departmentId;
+    const role = req.user?.role;
 
-    res.json(rows);
+    if (!token) {
+      return res.status(401).json({ message: "Thiếu token Nhị Gia" });
+    }
+
+    const result = await nhigiaService.fetchNhigiaDepartments(token);
+
+    if (!result?.results) {
+      return res.status(400).json({
+        message: "Không lấy được danh sách bộ phận",
+        data: result,
+      });
+    }
+
+    let departments;
+
+    if (role === "QL") {
+      departments = result.results;
+    } else {
+      departments = result.results.filter(
+        (d) => d.external_id === departmentId
+      );
+    }
+
+    res.json(departments);
 
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -18,7 +54,8 @@ exports.getAttachmentsByDepartment = async (req, res) => {
   try {
     const { departmentId } = req.params;
 
-    const data = await nhigiaService.fetchNhigiaAttachmentsByDepartment(departmentId);
+    const data =
+      await nhigiaService.fetchNhigiaAttachmentsByDepartment(departmentId);
 
     const mapped = data.map((item) => ({
       name: item.tenhoso,
@@ -28,7 +65,6 @@ exports.getAttachmentsByDepartment = async (req, res) => {
     }));
 
     res.json(mapped);
-
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -40,7 +76,7 @@ exports.getVisaVNTypeByDepartment = async (req, res) => {
 
     const data = await nhigiaService.fetchNhigiaVisaVNType(
       departmentId,
-      typeId
+      typeId,
     );
 
     const mapped = data.map((item) => ({
@@ -79,7 +115,7 @@ exports.getVisaVNTypeDetailsByDepartment = async (req, res) => {
     const data = await nhigiaService.fetchNhigiaVisaVNTypeDetails(
       departmentId,
       typeId,
-      detailId
+      detailId,
     );
 
     const mapped = data.map((item) => ({

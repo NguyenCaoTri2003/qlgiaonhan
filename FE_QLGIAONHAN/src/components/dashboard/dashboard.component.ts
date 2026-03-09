@@ -314,12 +314,14 @@ export class DashboardComponent {
       orders = orders.filter((o) => o.receiver === user.email);
     }
 
-    const depts = ["Visa Việt Nam", "Visa Nước Ngoài", "Giấy Phép Lao Động"];
+    console.log("Order: ", orders)
+
+    const depts = ["VSVN", "VSNN", "GPLD"];
     const colors = ["bg-blue-500", "bg-purple-500", "bg-teal-500"];
 
-    return depts.map((name, i) => ({
-      name,
-      count: orders.filter((o) => o.department?.name === name).length,
+    return depts.map((code, i) => ({
+      name: code,
+      count: orders.filter((o) => o.department?.code === code).length,
       color: colors[i],
     }));
   });
@@ -344,21 +346,4 @@ export class DashboardComponent {
     this.viewState.activeView.set("ORDERS");
   }
 
-  mockCreateOrder() {
-    const r = Math.floor(Math.random() * 1000);
-    const priorities: any[] = ["high", "medium", "normal", "low"];
-    const depts = ["Visa Việt Nam", "Visa Nước Ngoài", "Giấy Phép Lao Động"];
-    const provs = ["TP.HCM", "Long An", "Hà Nội"];
-
-    this.orderService.addOrder({
-      company: `Khách hàng Gấp ${r}`,
-      address: "Phường Hiệp Bình Phước, Thủ Đức",
-      purpose: "Giao hồ sơ TEST",
-      senderName: "Admin System",
-      department: depts[Math.floor(Math.random() * depts.length)] as unknown as DepartmentType,
-      priority: priorities[Math.floor(Math.random() * priorities.length)],
-      province: provs[Math.floor(Math.random() * provs.length)],
-      district: "Thủ Đức",
-    });
-  }
 }

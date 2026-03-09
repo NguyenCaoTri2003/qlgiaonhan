@@ -2,6 +2,8 @@ const { v4: uuidv4 } = require("uuid");
 const pool = require("../config/database");
 const fs = require("fs");
 const path = require("path");
+const nhigiaService = require("../services/nhigia.service");
+const { fetchNhigiaDepartments } = require("../services/nhigia.service");
 
 function removeVietnameseTones(str) {
   return str
@@ -13,37 +15,29 @@ function removeVietnameseTones(str) {
     .trim();
 }
 
-function renameUploadedFile(file, orderCode) {
-  const ext = path.extname(file.originalname);
+function moveFileToOrderFolder(file, orderCode, type) {
+  const oldPath = file.path;
 
-  const base = path.basename(file.originalname, ext).replace(/\s+/g, "_");
+  const newDir = path.join(__dirname, "../uploads", "orders", orderCode, type);
 
-  const now = new Date();
+  fs.mkdirSync(newDir, { recursive: true });
 
-  const yyyy = now.getFullYear();
-  const MM = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  const HH = String(now.getHours()).padStart(2, "0");
-  const mm = String(now.getMinutes()).padStart(2, "0");
-  const ss = String(now.getSeconds()).padStart(2, "0");
+  const newPath = path.join(newDir, file.filename);
 
-  const timestamp = `${yyyy}${MM}${dd}${HH}${mm}${ss}`;
+  fs.renameSync(oldPath, newPath);
 
-  const newFileName = `${orderCode}-${timestamp}-${base}${ext}`;
+  let relativePath = path.relative(path.join(__dirname, "../uploads"), newPath);
 
-  const newPath = path.join(path.dirname(file.path), newFileName);
-
-  fs.renameSync(file.path, newPath);
-
-  const relativePath = path
-    .relative(path.join(__dirname, "../uploads"), newPath)
-    .replace(/\\/g, "/");
+  relativePath = relativePath.replace(/\\/g, "/");
 
   return {
-    newFileName,
+    newFileName: file.filename,
     relativePath,
   };
 }
+
+let deptCache = null;
+let deptCacheTime = 0;
 
 exports.getAllOrders = async (req, res) => {
   try {
@@ -54,22 +48,37 @@ exports.getAllOrders = async (req, res) => {
     const search = req.query.search || "";
     const dept = req.query.dept || "";
     const filter = req.query.filter || "ALL";
+
     const user = req.user || {};
-    const userEmail = user.email || "";
     const userId = user.id || null;
     const role = user.role || "";
+    const token = user.nhigia_token;
+
+    console.log("user role: ", role);
+
+    if (!["QL", "NVGN", "NVADMIN"].includes(role)) {
+      return res.status(403).json({ message: "Không có quyền xem đơn" });
+    }
 
     let where = [];
     let params = [];
 
     let orderBy = "ORDER BY o.updated_at DESC";
 
+    // NVGN chỉ xem đơn của mình
     if (role === "NVGN") {
       orderBy = "ORDER BY o.sort_index ASC, o.updated_at DESC";
+
       where.push("o.shipper_id = ?");
       params.push(userId);
 
       where.push("o.status != 'SUPPLEMENT_REQUIRED'");
+    }
+
+    // NVADMIN chỉ xem đơn do mình tạo
+    if (role === "NVADMIN") {
+      where.push("o.created_by = ?");
+      params.push(userId);
     }
 
     if (search) {
@@ -87,7 +96,7 @@ exports.getAllOrders = async (req, res) => {
     }
 
     if (dept) {
-      where.push(`d.code = ?`);
+      where.push(`o.department_id = ?`);
       params.push(dept);
     }
 
@@ -107,14 +116,8 @@ exports.getAllOrders = async (req, res) => {
 
     const [rows] = await pool.query(
       `
-      SELECT 
-        o.*,
-        d.id   AS department_id,
-        d.name AS department_name,
-        d.code AS department_code
+      SELECT o.*
       FROM nhigia_logistics_orders o
-      LEFT JOIN nhigia_logistics_departments d
-        ON o.department_id = d.id
       ${whereSQL}
       ${orderBy}
       LIMIT ? OFFSET ?
@@ -126,12 +129,27 @@ exports.getAllOrders = async (req, res) => {
       `
       SELECT COUNT(*) as total
       FROM nhigia_logistics_orders o
-      LEFT JOIN nhigia_logistics_departments d
-        ON o.department_id = d.id
       ${whereSQL}
       `,
       params,
     );
+
+    let departments = [];
+
+    if (!deptCache || Date.now() - deptCacheTime > 10 * 60 * 1000) {
+      const resDept = await fetchNhigiaDepartments(token);
+
+      deptCache = resDept.results || [];
+      deptCacheTime = Date.now();
+    }
+
+    departments = deptCache;
+
+    const deptMap = {};
+
+    departments.forEach((d) => {
+      deptMap[d.id] = d;
+    });
 
     const mapped = rows.map((r) => ({
       id: String(r.id),
@@ -144,8 +162,8 @@ exports.getAllOrders = async (req, res) => {
       department: r.department_id
         ? {
             id: r.department_id,
-            name: r.department_name,
-            code: r.department_code,
+            name: deptMap[r.department_id]?.name || null,
+            code: deptMap[r.department_id]?.code || null,
           }
         : null,
 
@@ -203,6 +221,7 @@ exports.getAllOrders = async (req, res) => {
       totalPages: Math.ceil(count[0].total / limit),
     });
   } catch (err) {
+    console.error("Get Orders Error:", err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -213,14 +232,10 @@ exports.createOrder = async (req, res) => {
     await connection.beginTransaction();
 
     const user = req.user;
-    console.log("Creating order by user:", user);
     const now = Date.now();
     // const body = req.body;
     const body = JSON.parse(req.body.data);
     const files = req.files;
-
-    console.log("BODY:", req.body);
-    console.log("FILES:", req.files);
 
     const [result] = await connection.query(
       `
@@ -262,10 +277,11 @@ exports.createOrder = async (req, res) => {
         external_sender_id,
         external_status,
         external_status_text,
+        created_by,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `,
       [
         now,
@@ -304,6 +320,7 @@ exports.createOrder = async (req, res) => {
         body.external_sender_id ?? null,
         body.external_status ?? null,
         body.external_status_text ?? null,
+        user.id,
       ],
     );
 
@@ -365,9 +382,10 @@ exports.createOrder = async (req, res) => {
 
     if (files && files.length > 0) {
       for (const file of files) {
-        const { newFileName, relativePath } = renameUploadedFile(
+        const { newFileName, relativePath } = moveFileToOrderFolder(
           file,
           orderCode,
+          "attachments",
         );
 
         await connection.query(
@@ -411,7 +429,7 @@ exports.createOrder = async (req, res) => {
       (timestamp, message, read_status, target_role)
       VALUES (?, ?, 0, ?)
       `,
-      [now, `Đơn ${orderId} cần điều phối`, "QL"],
+      [now, `Đơn hàng mới ${orderCode} cần điều phối`, "QL"],
     );
 
     await connection.commit();
@@ -420,8 +438,6 @@ exports.createOrder = async (req, res) => {
       message: "Created successfully",
       id: orderId,
     });
-
-    console.log("Created successfully", orderId);
   } catch (err) {
     await connection.rollback();
     res.status(500).json({ error: err.message });
@@ -437,6 +453,7 @@ exports.updateOrder = async (req, res) => {
     await connection.beginTransaction();
 
     const orderId = req.params.id;
+    const user = req.user;
     const body = JSON.parse(req.body.data);
     const files = req.files;
     const now = Date.now();
@@ -543,9 +560,10 @@ exports.updateOrder = async (req, res) => {
       const orderCode = orderRows[0].order_code;
 
       for (const file of files) {
-        const { newFileName, relativePath } = renameUploadedFile(
+        const { newFileName, relativePath } = moveFileToOrderFolder(
           file,
           orderCode,
+          "attachments",
         );
 
         await connection.query(
@@ -606,10 +624,10 @@ exports.updateOrder = async (req, res) => {
     await connection.query(
       `
       INSERT INTO nhigia_logistics_logs
-      (timestamp, action, order_id, details)
-      VALUES (?, ?, ?, ?)
+      (timestamp, user_email, user_name, user_id, action, order_id, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-      [now, "UPDATE", orderId, "Cập nhật đơn"],
+      [now, user.email, user.name, user.id, "UPDATE", orderId, "Cập nhật đơn"],
     );
 
     await connection.commit();
@@ -626,6 +644,7 @@ exports.updateOrder = async (req, res) => {
 exports.rejectOrder = async (req, res) => {
   const orderId = req.params.id;
   const { reason } = req.body;
+  const user = req.user;
   const now = Date.now();
 
   try {
@@ -637,10 +656,12 @@ exports.rejectOrder = async (req, res) => {
     );
 
     await pool.query(
-      `INSERT INTO nhigia_logistics_logs
-       (timestamp, action, order_id, details)
-       VALUES (?, ?, ?, ?)`,
-      [now, "REJECT", orderId, reason],
+      `
+      INSERT INTO nhigia_logistics_logs
+      (timestamp, user_email, user_name, user_id, action, order_id, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [now, user.email, user.name, user.id, "REJECT", orderId, reason],
     );
 
     res.json({ message: "Rejected successfully" });
@@ -690,6 +711,7 @@ exports.updateOrderSort = async (req, res) => {
 
 exports.completeOrder = async (req, res) => {
   const now = Date.now();
+  const user = req.user;
 
   try {
     await pool.query(
@@ -700,10 +722,20 @@ exports.completeOrder = async (req, res) => {
     );
 
     await pool.query(
-      `INSERT INTO nhigia_logistics_logs
-       (timestamp, action, order_id, details)
-       VALUES (?, ?, ?, ?)`,
-      [now, "COMPLETE", req.params.id, "Hoàn thành"],
+      `
+      INSERT INTO nhigia_logistics_logs
+      (timestamp, user_email, user_name, user_id, action, order_id, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        now,
+        user.email,
+        user.name,
+        user.id,
+        "COMPLETE",
+        req.params.id,
+        "Hoàn thành đơn",
+      ],
     );
 
     res.json({ message: "Completed successfully" });
@@ -745,6 +777,7 @@ exports.deleteOrder = async (req, res) => {
   const connection = await pool.getConnection();
   const orderId = req.params.id;
   const now = Date.now();
+  const user = req.user;
 
   try {
     await connection.beginTransaction();
@@ -770,10 +803,12 @@ exports.deleteOrder = async (req, res) => {
     ]);
 
     await connection.query(
-      `INSERT INTO nhigia_logistics_logs
-       (timestamp, action, order_id, details)
-       VALUES (?, ?, ?, ?)`,
-      [now, "DELETE", orderId, "Xóa đơn"],
+      `
+      INSERT INTO nhigia_logistics_logs
+      (timestamp, user_email, user_name, user_id, action, order_id, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [now, user.email, user.name, user.id, "DELETE", orderId, "Xóa đơn"],
     );
 
     await connection.commit();
@@ -788,8 +823,9 @@ exports.deleteOrder = async (req, res) => {
 };
 
 exports.assignReceiver = async (req, res) => {
-  const { receiver_id, receiver_email, receiver_name } = req.body;
+  const { order_code, receiver_id, receiver_email, receiver_name } = req.body;
   const orderId = req.params.id;
+  const user = req.user;
   const now = Date.now();
 
   try {
@@ -815,10 +851,27 @@ exports.assignReceiver = async (req, res) => {
     );
 
     await pool.query(
+      `
+      INSERT INTO nhigia_logistics_logs
+      (timestamp, user_email, user_name, user_id, action, order_id, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        now,
+        user.email,
+        user.name,
+        user.id,
+        "ASSIGNED",
+        orderId,
+        `Đơn hàng được giao cho ${receiver_name}`,
+      ],
+    );
+
+    await pool.query(
       `INSERT INTO nhigia_logistics_notifications
        (timestamp, message, read_status, target_role, target_email)
        VALUES (?, ?, 0, ?, ?)`,
-      [now, `Bạn được giao đơn ${orderId}`, "NVGN", receiver_email],
+      [now, `Bạn được giao đơn hàng mới: ${order_code}`, "NVGN", receiver_email],
     );
 
     res.json({ message: "Assigned successfully" });
@@ -830,6 +883,7 @@ exports.assignReceiver = async (req, res) => {
 exports.shipperAccept = async (req, res) => {
   const now = Date.now();
   const { checklist, missingDocs } = req.body;
+  const user = req.user;
 
   try {
     await pool.query(
@@ -847,6 +901,23 @@ exports.shipperAccept = async (req, res) => {
            WHERE id = ?`,
           [item.checked ? 1 : 0, item.id],
         );
+
+        await pool.query(
+          `
+      INSERT INTO nhigia_logistics_logs
+      (timestamp, user_email, user_name, user_id, action, order_id, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+          [
+            now,
+            user.email,
+            user.name,
+            user.id,
+            "SHIPPER_ACCEPTED",
+            req.params.id,
+            "Đồng ý nhận đơn",
+          ],
+        );
       }
     }
 
@@ -858,6 +929,7 @@ exports.shipperAccept = async (req, res) => {
 
 exports.shipperReject = async (req, res) => {
   const now = Date.now();
+  const user = req.user;
 
   try {
     await pool.query(
@@ -875,6 +947,15 @@ exports.shipperReject = async (req, res) => {
       ["REJECTED", now, req.body.reason, req.params.id],
     );
 
+    await pool.query(
+      `
+      INSERT INTO nhigia_logistics_logs
+      (timestamp, user_email, user_name, user_id, action, order_id, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [now, user.email, user.name, user.id, "SHIPPER_REJECTED", req.params.id, req.body.reason],
+    );
+
     res.json({ message: "Shipper rejected" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -885,27 +966,56 @@ exports.shipperComplete = async (req, res) => {
   const connection = await pool.getConnection();
 
   try {
+    await connection.beginTransaction();
+
     const now = Date.now();
     const orderId = req.params.id;
-    const files = req.files;
+    const files = req.files?.files || [];
+    const signatureFile = req.files?.signature?.[0];
+    const user = req.user;
 
-    const { note, location, signature } = req.body;
+    console.log("FILES:", req.files);
 
-    await connection.beginTransaction();
+    const { note, location } = req.body;
+
+    const loc = location ? JSON.parse(location) : null;
+
+    const [orderRows] = await connection.query(
+      `SELECT order_code FROM nhigia_logistics_orders WHERE id = ?`,
+      [orderId],
+    );
+
+    if (!orderRows.length) {
+      throw new Error("Order not found");
+    }
+
+    const orderCode = orderRows[0].order_code;
 
     await connection.query(
       `UPDATE nhigia_logistics_orders
-       SET status = ?, status_update_date = ?, completion_note = ?
+       SET status = ?, 
+           status_update_date = ?, 
+           completion_note = ?,
+           completion_lat = ?,
+           completion_lng = ?
        WHERE id = ?`,
-      ["COMPLETED", now, note, orderId]
+      [
+        "COMPLETED",
+        now,
+        note || null,
+        loc?.lat || null,
+        loc?.lng || null,
+        orderId,
+      ],
     );
 
-    if (files && files.length > 0) {
+    if (files.length > 0) {
       for (const file of files) {
-
-        const relativePath = path
-          .relative(path.join(__dirname, "../uploads"), file.path)
-          .replace(/\\/g, "/");
+        const { newFileName, relativePath } = moveFileToOrderFolder(
+          file,
+          orderCode,
+          "success",
+        );
 
         await connection.query(
           `
@@ -917,57 +1027,86 @@ exports.shipperComplete = async (req, res) => {
             file_path,
             file_type,
             file_size,
+            type,
             created_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, NOW())
+          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
           `,
           [
             orderId,
             file.originalname,
-            file.filename,
+            newFileName,
             relativePath,
             file.mimetype,
             file.size,
-          ]
+            "COMPLETE_IMAGE",
+          ],
         );
       }
+    }
+
+    if (signatureFile) {
+      const { newFileName, relativePath } = moveFileToOrderFolder(
+        signatureFile,
+        orderCode,
+        "signature",
+      );
+
+      await connection.query(
+        `
+    INSERT INTO nhigia_logistics_files
+    (
+      order_id,
+      original_name,
+      file_name,
+      file_path,
+      file_type,
+      file_size,
+      type,
+      created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+    `,
+        [
+          orderId,
+          signatureFile.originalname,
+          newFileName,
+          relativePath,
+          signatureFile.mimetype,
+          signatureFile.size,
+          "SIGNATURE",
+        ],
+      );
     }
 
     await connection.query(
       `
       INSERT INTO nhigia_logistics_logs
-      (timestamp, action, order_id, details)
-      VALUES (?, ?, ?, ?)
+      (timestamp, user_email, user_name, user_id, action, order_id, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-      [now, "SHIPPER_COMPLETE", orderId, "Shipper hoàn tất đơn"]
+      [now, user.email, user.name, user.id, "SHIPPER_COMPLETE", orderId, "Shipper hoàn tất đơn"],
     );
 
     await connection.commit();
 
-    res.json({ message: "Completed by shipper" });
+    res.json({
+      message: "Completed by shipper",
+    });
   } catch (err) {
     await connection.rollback();
-    res.status(500).json({ error: err.message });
+
+    res.status(500).json({
+      error: err.message,
+    });
   } finally {
     connection.release();
   }
 };
 
-// exports.shipperComplete = async (req, res) => {
-//   const now = Date.now();
-
-//   await pool.query(
-//     `UPDATE nhigia_logistics_orders
-//      SET status = ?, status_update_date = ?, completion_note = ?
-//      WHERE id = ?`,
-//     ["COMPLETED", now, req.body.note, req.params.id],
-//   );
-
-//   res.json({ message: "Completed by shipper" });
-// };
-
 exports.qlRequestSupplement = async (req, res) => {
   const now = Date.now();
+  const user = req.user;
 
   await pool.query(
     `UPDATE nhigia_logistics_orders
@@ -978,6 +1117,15 @@ exports.qlRequestSupplement = async (req, res) => {
      WHERE id = ?`,
     ["SUPPLEMENT_REQUIRED", now, req.body.note, "QL", now, req.params.id],
   );
+
+  await pool.query(
+      `
+      INSERT INTO nhigia_logistics_logs
+      (timestamp, user_email, user_name, user_id, action, order_id, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [now, user.email, user.name, user.id, "SUPPLEMENT_REQUIRED", req.params.id, `Trưởng phòng yêu cầu bổ sung: ${req.body.note}`],
+    );
 
   res.json({ message: "Requested supplement" });
 };
@@ -994,24 +1142,30 @@ exports.shipperReturnSupplement = async (req, res) => {
     ["SUPPLEMENT_REQUIRED", now, req.body.note, "NVGN", now, req.params.id],
   );
 
+  await pool.query(
+      `
+      INSERT INTO nhigia_logistics_logs
+      (timestamp, user_email, user_name, user_id, action, order_id, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [now, user.email, user.name, user.id, "SUPPLEMENT_REQUIRED", req.params.id, `Shipper yêu cầu bổ sung: ${req.body.note}`],
+    );
+
   res.json({ message: "Shipper requested supplement" });
 };
 
 exports.getOrderDetail = async (req, res) => {
   try {
     const orderId = req.params.id;
+    const user = req.user || {};
+    const token = user.nhigia_token;
 
+    // ===== Load order =====
     const [[r]] = await pool.query(
       `
-      SELECT 
-        o.*,
-        d.id AS department_id,
-        d.name AS department_name,
-        d.code AS department_code
-      FROM nhigia_logistics_orders o
-      LEFT JOIN nhigia_logistics_departments d
-        ON o.department_id = d.id
-      WHERE o.id = ?
+      SELECT *
+      FROM nhigia_logistics_orders
+      WHERE id = ?
       `,
       [orderId],
     );
@@ -1020,6 +1174,7 @@ exports.getOrderDetail = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
+    // ===== Load attachments table =====
     const [attachmentRows] = await pool.query(
       `
       SELECT id, order_id, name, qty, checked
@@ -1037,31 +1192,70 @@ exports.getOrderDetail = async (req, res) => {
       checked: !!a.checked,
     }));
 
+    // ===== Load files =====
     const [fileRows] = await pool.query(
       `
-      SELECT id, file_name, file_type, file_path
+      SELECT id, file_name, file_type, file_path, type
       FROM nhigia_logistics_files
       WHERE order_id = ?
       `,
       [orderId],
     );
 
-    const uploadedFiles = fileRows.map((f) => ({
-      id: f.id,
-      name: f.file_name,
-      type: f.file_type,
-      data: `${process.env.BASE_URL}/uploads/${f.file_path}`,
-    }));
+    const completionImages = [];
+    const uploadedFiles = [];
+    let signature = null;
 
-    const completionImages = fileRows.map((f) => ({
-      id: f.id,
-      name: f.file_name,
-      type: f.file_type,
-      data: `${process.env.BASE_URL}/uploads/${f.file_path}`,
-    }));
+    fileRows.forEach((f) => {
+      const url = `${process.env.BASE_URL}/uploads/${f.file_path}`;
 
+      if (f.type === "COMPLETE_IMAGE") {
+        completionImages.push(url);
+      }
+
+      if (f.type === "SIGNATURE") {
+        signature = url;
+      }
+
+      if (f.type === "OTHER") {
+        uploadedFiles.push({
+          id: f.id,
+          name: f.file_name,
+          type: f.file_type,
+          data: url,
+        });
+      }
+    });
+
+    // ===== Delivery location =====
+    const deliveryLocation =
+      r.completion_lat && r.completion_lng
+        ? {
+            lat: Number(r.completion_lat),
+            lng: Number(r.completion_lng),
+          }
+        : null;
+
+    // ===== Department cache logic =====
+    let departments = [];
+
+    if (!deptCache || Date.now() - deptCacheTime > 10 * 60 * 1000) {
+      const resDept = await fetchNhigiaDepartments(token);
+      deptCache = resDept.results || [];
+      deptCacheTime = Date.now();
+    }
+
+    departments = deptCache;
+
+    const deptMap = {};
+    departments.forEach((d) => {
+      deptMap[d.id] = d;
+    });
+
+    // ===== Map response =====
     const mapped = {
       id: String(r.id),
+
       orderCode: r.order_code,
       createDate: r.create_date,
       creator: r.creator,
@@ -1072,8 +1266,8 @@ exports.getOrderDetail = async (req, res) => {
       department: r.department_id
         ? {
             id: r.department_id,
-            name: r.department_name,
-            code: r.department_code,
+            name: deptMap[r.department_id]?.name || null,
+            code: deptMap[r.department_id]?.code || null,
           }
         : null,
 
@@ -1086,6 +1280,7 @@ exports.getOrderDetail = async (req, res) => {
       company: r.company,
       address: r.address,
       addressLine: r.address_line,
+
       ward: r.ward,
       district: r.district,
       province: r.province,
@@ -1119,14 +1314,25 @@ exports.getOrderDetail = async (req, res) => {
       sortIndex: r.sort_index,
       shipperHighlightColor: r.shipper_highlight_color,
 
+      updatedAt: r.updated_at,
+
       attachments,
+
+      completionImages,
+      signature,
       uploadedFiles,
+      deliveryLocation,
     };
 
+    console.log("Map: ", mapped);
+
     res.json(mapped);
-    console.log("Fetched order detail", mapped);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Get Order Detail Error:", err);
+
+    res.status(500).json({
+      error: err.message,
+    });
   }
 };
 

@@ -66,34 +66,6 @@ import { Router } from '@angular/router';
             Đăng Nhập
           </button>
         </div>
-
-        <div class="mt-6 text-xs text-gray-500 bg-gray-50 p-2 rounded">
-          <p><strong>Demo Accounts (Pass: Nhigia&#64;2016):</strong></p>
-          <p
-            class="cursor-pointer hover:text-blue-600"
-            (click)="fill('Qlgiaonhan@nhigia.vn')"
-          >
-            QL: Qlgiaonhan&#64;nhigia.vn
-          </p>
-          <p
-            class="cursor-pointer hover:text-blue-600"
-            (click)="fill('nvadmin@nhigia.vn')"
-          >
-            Admin: nvadmin&#64;nhigia.vn
-          </p>
-          <p
-            class="cursor-pointer hover:text-blue-600"
-            (click)="fill('nvgiaonhan1@nhigia.vn')"
-          >
-            Shipper: nvgiaonhan1&#64;nhigia.vn
-          </p>
-          <p
-            class="cursor-pointer hover:text-blue-600 font-bold"
-            (click)="fill('it@nhigia.vn')"
-          >
-            IT Admin: it&#64;nhigia.vn
-          </p>
-        </div>
       </div>
     </div>
   `,
@@ -124,10 +96,5 @@ export class LoginComponent {
         this.errorMsg.set("Sai thông tin đăng nhập");
       },
     });
-  }
-
-  fill(email: string) {
-    this.email = email;
-    this.password = "Nhigia@2016";
   }
 }
