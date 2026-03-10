@@ -281,6 +281,12 @@ export class DashboardComponent {
   showCreateForm = signal(false);
   editingOrder = signal<any>(null);
 
+  ngOnInit() {
+    if (this.orderService.orders().length === 0) {
+      this.orderService.loadOrders().subscribe();
+    }
+  }
+
   // Compute overall stats
   stats = computed(() => {
     const user = this.user();
@@ -305,7 +311,6 @@ export class DashboardComponent {
     };
   });
 
-  // Breakdown by Dept
   deptStats = computed(() => {
     const user = this.user();
     let orders = this.orderService.orders();
@@ -314,13 +319,17 @@ export class DashboardComponent {
       orders = orders.filter((o) => o.receiver === user.email);
     }
 
-    console.log("Order: ", orders)
+    const deptMap: Record<string, string> = {
+      VSVN: "Visa Việt Nam",
+      VSNN: "Visa Nước Ngoài",
+      GPLD: "Giấy Phép Lao Động",
+    };
 
     const depts = ["VSVN", "VSNN", "GPLD"];
     const colors = ["bg-blue-500", "bg-purple-500", "bg-teal-500"];
 
     return depts.map((code, i) => ({
-      name: code,
+      name: deptMap[code], 
       count: orders.filter((o) => o.department?.code === code).length,
       color: colors[i],
     }));
@@ -345,5 +354,4 @@ export class DashboardComponent {
     this.orderService.orderListFilter.set(filter as any);
     this.viewState.activeView.set("ORDERS");
   }
-
 }
