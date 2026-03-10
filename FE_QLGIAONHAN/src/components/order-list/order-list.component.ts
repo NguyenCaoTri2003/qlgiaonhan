@@ -436,8 +436,7 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
                     <td
                       class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate"
                     >
-                      {{ order.purpose }} -
-                      {{ order.updatedAt | date: "HH:mm dd/MM/yyyy" }}
+                      {{ order.purpose }}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="flex flex-col gap-2">
