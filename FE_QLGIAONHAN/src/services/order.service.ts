@@ -40,10 +40,19 @@ export class OrderService {
     );
   }
 
-  refreshOrders() {
-    this.loadOrders();
-  }
+  private lastQuery = {
+    page: 1,
+    limit: 20,
+    search: "",
+    dept: "",
+    filter: "ALL",
+  };
 
+  refreshOrders() {
+    const q = this.lastQuery;
+
+    this.loadOrders(q.page, q.limit, q.search, q.dept, q.filter).subscribe();
+  }
   clearOrders() {
     this._orders.set([]);
   }
@@ -81,7 +90,7 @@ export class OrderService {
     dept: string = "",
     filter: string = "ALL",
   ) {
-    this.loading.set(true);
+    this.lastQuery = { page, limit, search, dept, filter };
 
     return this.http
       .get<any>(
@@ -91,11 +100,10 @@ export class OrderService {
         tap((res) => {
           this._orders.set(res.data);
           this._totalPages.set(res.totalPages);
-          this.loading.set(false);
         }),
       );
   }
-
+  
   getOrderDetail(id: number) {
     return this.http.get<Order>(`${this.API}/orders/${id}`);
   }

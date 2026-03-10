@@ -1303,8 +1303,7 @@ export class OrderDetailComponent implements OnInit {
   canEdit() {
     if (this.currentUserRole() === "IT") return true;
     return (
-      this.currentUserRole() === "NVADMIN" &&
-      (this.order().status === "PENDING")
+      this.currentUserRole() === "NVADMIN" && this.order().status === "PENDING"
     );
   }
 
@@ -1386,7 +1385,11 @@ export class OrderDetailComponent implements OnInit {
         .subscribe({
           next: () => {
             this.toast.show("Đã phân công nhân viên giao nhận", "success");
-            this.close.emit();
+            console.log("Thành công");
+            setTimeout(() => {
+              this.close.emit();
+              this.showRequestInput.set(false);
+            }, 500);
           },
           error: () => {
             this.toast.show("Phân công nhân viên thất bại", "error");
@@ -1406,7 +1409,7 @@ export class OrderDetailComponent implements OnInit {
         setTimeout(() => {
           this.close.emit();
           this.showRequestInput.set(false);
-        }, 300); // delay 300ms
+        }, 300);
       },
       error: () => {
         this.toast.show("Gửi yêu cầu bổ sung thất bại", "error");
@@ -1437,8 +1440,10 @@ export class OrderDetailComponent implements OnInit {
     this.orderService.shipperReject(this.order().id, note).subscribe({
       next: () => {
         this.toast.show("Đã từ chối yêu cầu giao nhận", "success");
-        this.close.emit();
-        this.showRejectInput.set(false);
+        setTimeout(() => {
+          this.close.emit();
+          this.showRequestInput.set(false);
+        }, 300);
       },
       error: () => {
         this.toast.show("Từ chối yêu cầu thất bại", "error");
