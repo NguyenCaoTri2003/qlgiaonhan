@@ -177,6 +177,11 @@ import { AuthService } from "../../services/auth.service";
                   📞 {{ selectedSenderPhone() }} (Bấm gọi ngay)
                 </a>
               }
+              @if (form.get("senderName")?.errors?.["senderNotSelected"]) {
+                <p class="text-xs text-red-500 mt-1">
+                  Vui lòng chọn người giao từ danh sách
+                </p>
+              }
             </div>
           </div>
 
@@ -879,7 +884,10 @@ export class OrderFormComponent implements OnInit {
 
     this.form = this.fb.group({
       department: [data?.department?.id || null, Validators.required],
-      senderName: [data?.senderName || "", Validators.required],
+      senderName: [
+        data?.senderName || "",
+        [Validators.required, () => this.senderValidator()],
+      ],
       phone: [data?.phone || "", Validators.required],
       company: [data?.company || "", Validators.required],
       addressLine: [data?.addressLine || "", Validators.required],
@@ -1047,10 +1055,32 @@ export class OrderFormComponent implements OnInit {
     document.removeEventListener("click", this.clickListener, true);
   }
 
+  // onSenderSearch(event: any) {
+  //   const keyword = event.target.value.toLowerCase();
+
+  //   this.senderKeyword.set(keyword);
+
+  //   const filtered = this.allSenders().filter((u) =>
+  //     u.name.toLowerCase().includes(keyword),
+  //   );
+
+  //   this.senders.set(filtered.slice(0, 20));
+  // }
+
+  senderValidator = (): ValidationErrors | null => {
+    if (!this.selectedSenderId()) {
+      return { senderNotSelected: true };
+    }
+    return null;
+  };
+
   onSenderSearch(event: any) {
     const keyword = event.target.value.toLowerCase();
 
     this.senderKeyword.set(keyword);
+
+    this.selectedSenderId.set(null);
+    this.selectedSenderPhone.set("");
 
     const filtered = this.allSenders().filter((u) =>
       u.name.toLowerCase().includes(keyword),
@@ -1075,6 +1105,11 @@ export class OrderFormComponent implements OnInit {
 
     this.selectedSenderPhone.set(sender.phone || "");
     this.selectedSenderId.set(sender.id);
+
+    const control = this.form.get("senderName");
+    control?.updateValueAndValidity();
+    control?.markAsTouched();
+
     this.showSenderDropdown.set(false);
   }
 
@@ -1320,6 +1355,11 @@ export class OrderFormComponent implements OnInit {
 
   onSubmit() {
     if (this.form.invalid) return;
+
+    if (!this.selectedSenderId()) {
+      this.toast.show("Vui lòng chọn người giao từ danh sách!", "error");
+      return;
+    }
 
     const formVal = this.form.getRawValue();
 

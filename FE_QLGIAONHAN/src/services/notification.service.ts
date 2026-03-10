@@ -1,6 +1,7 @@
 import { Injectable, signal, computed } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { AuthService } from "./auth.service";
+import { environment } from "../environments/environment";
 
 export interface Notification {
   id: number;
@@ -15,7 +16,7 @@ export interface Notification {
   providedIn: "root",
 })
 export class NotificationService {
-  private API = "http://localhost:5000/api";
+  private API = environment.API_URL;
 
   private _notifications = signal<Notification[]>([]);
   notifications = this._notifications.asReadonly();

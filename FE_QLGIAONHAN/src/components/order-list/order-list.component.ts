@@ -219,7 +219,9 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
                         'text-[10px] font-bold uppercase tracking-wide ' +
                         getDeptTextColorClass(order.department?.code || '')
                       "
-                      >{{ order.department?.name || "Không rõ phòng ban" }}</span
+                      >{{
+                        order.department?.name || "Không rõ phòng ban"
+                      }}</span
                     >
                   </div>
                   <div class="flex flex-col items-end gap-2 shrink-0 ml-2">
@@ -380,7 +382,7 @@ import { LoadingComponent } from "../../app/shared/loading/loading.component";
                         [class]="
                           'text-xs font-semibold mt-1 ' +
                           getDeptTextColorClass(order.department?.code || '')
-                        " 
+                        "
                       >
                         {{ order.department?.name || "Không rõ phòng ban" }}
                       </div>
@@ -846,23 +848,40 @@ export class OrderListComponent {
 
     this.isSearched.set(hasFilter);
 
-    this.orderService.loadOrders(
-      this.currentPage,
-      this.limit,
-      this.searchTerm(),
-      this.filterDept(),
-      this.currentFilter(),
-    );
+    this.loading.set(true);
+
+    this.orderService
+      .loadOrders(
+        this.currentPage,
+        this.limit,
+        this.searchTerm(),
+        this.filterDept(),
+        this.currentFilter(),
+      )
+      .subscribe({
+        next: () => this.loading.set(false),
+        error: (err) => {
+          console.error("Search error:", err);
+          this.loading.set(false);
+        },
+      });
   }
 
   load() {
-    this.orderService.loadOrders(
-      this.currentPage,
-      this.limit,
-      this.searchTerm(),
-      this.filterDept(),
-      this.currentFilter(),
-    );
+    this.loading.set(true);
+
+    this.orderService
+      .loadOrders(
+        this.currentPage,
+        this.limit,
+        this.searchTerm(),
+        this.filterDept(),
+        this.currentFilter(),
+      )
+      .subscribe({
+        next: () => this.loading.set(false),
+        error: () => this.loading.set(false),
+      });
   }
 
   clearSearch() {

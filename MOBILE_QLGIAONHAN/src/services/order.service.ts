@@ -10,10 +10,10 @@ export const orderService = {
     limit = 20,
     search = "",
     dept = "",
-    filter = "ALL"
+    filter = "ALL",
   ) {
     const res = await axiosClient.get(
-      `/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}&filter=${filter}`
+      `/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}&filter=${filter}`,
     );
 
     return res.data;
@@ -39,16 +39,18 @@ export const orderService = {
     return res.data;
   },
 
-  // ===============================
-  // ASSIGN SHIPPER
-  // ===============================
+  async getOrderCounts() {
+    const res = await axiosClient.get("/orders/counts");
+    console.log("RES: ", res.data)
+    return res.data;
+  },
 
   async assignReceiver(
     id: number,
     order_code: string,
     receiver_id: number,
     receiver_email: string,
-    receiver_name: string
+    receiver_name: string,
   ) {
     const res = await axiosClient.post(`/orders/${id}/assign`, {
       order_code,
@@ -86,7 +88,7 @@ export const orderService = {
     files: any[],
     location: any,
     signature: any,
-    note: string
+    note: string,
   ) {
     const formData = new FormData();
 
@@ -116,7 +118,7 @@ export const orderService = {
         headers: {
           "Content-Type": "multipart/form-data",
         },
-      }
+      },
     );
 
     return res.data;
@@ -125,7 +127,7 @@ export const orderService = {
   async shipperReturnSupplement(id: number, note: string) {
     const res = await axiosClient.post(
       `/orders/${id}/shipper-return-supplement`,
-      { note }
+      { note },
     );
 
     return res.data;
@@ -155,10 +157,9 @@ export const orderService = {
   },
 
   async requestSupplement(id: number, note: string) {
-    const res = await axiosClient.post(
-      `/orders/${id}/request-supplement`,
-      { note }
-    );
+    const res = await axiosClient.post(`/orders/${id}/request-supplement`, {
+      note,
+    });
 
     return res.data;
   },
@@ -187,7 +188,7 @@ export const orderService = {
 
   async setShipperHighlightColor(
     orderId: number,
-    color: "red" | "blue" | "yellow" | null
+    color: "red" | "blue" | "yellow" | null,
   ) {
     const res = await axiosClient.put(`/orders/${orderId}/highlight`, {
       color,

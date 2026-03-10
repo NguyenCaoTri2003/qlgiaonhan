@@ -6,11 +6,13 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import DraggableFlatList from "react-native-draggable-flatlist";
 import { Ionicons } from "@expo/vector-icons";
 import debounce from "lodash.debounce";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { orderService } from "../services/order.service";
 import {
@@ -21,8 +23,10 @@ import {
 } from "../utils/statusOrder";
 import { authService } from "../services/auth.service";
 import { getDeptColor, getDeptTextColor } from "../utils/departmentColor";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useOrderContext } from "../contexts/OrderContext";
 
-export default function OrderListScreen({ navigation }: any) {
+export default function OrderListScreen({ navigation, route }: any) {
   const PAGE_SIZE = 10;
 
   const [orders, setOrders] = useState<any[]>([]);
@@ -37,6 +41,16 @@ export default function OrderListScreen({ navigation }: any) {
   const [filter, setFilter] = useState("ALL");
 
   const hasMore = page < totalPages;
+  const tabHeight = useBottomTabBarHeight();
+  const { pendingOrdersCount } = useOrderContext();
+
+  useEffect(() => {
+    if (route.params?.openOrderId) {
+      navigation.navigate("OrderDetail", {
+        id: route.params.openOrderId,
+      });
+    }
+  }, [route.params?.openOrderId]);
 
   const fetchOrders = async (
     pageNum = 1,
@@ -75,9 +89,15 @@ export default function OrderListScreen({ navigation }: any) {
     }
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrders(1);
+    }, []),
+  );
+
   useEffect(() => {
-    fetchOrders(1);
-  }, [filter]);
+    fetchOrders(1, false, search, filter);
+  }, [filter, search]);
 
   const debouncedSearch = useCallback(
     debounce((text) => {
@@ -85,6 +105,31 @@ export default function OrderListScreen({ navigation }: any) {
     }, 500),
     [],
   );
+
+  const getHighlightStyle = (color?: string) => {
+    switch (color) {
+      case "red":
+        return {
+          backgroundColor: "#fef2f2",
+          borderColor: "#fecaca",
+        };
+
+      case "blue":
+        return {
+          backgroundColor: "#eff6ff",
+          borderColor: "#bfdbfe",
+        };
+
+      case "yellow":
+        return {
+          backgroundColor: "#fffbeb",
+          borderColor: "#fde68a",
+        };
+
+      default:
+        return null;
+    }
+  };
 
   const onChangeSearch = (text: string) => {
     setSearch(text);
@@ -120,73 +165,86 @@ export default function OrderListScreen({ navigation }: any) {
     navigation.navigate("OrderDetail", { id: order.id });
   };
 
-  const renderItem = ({ item, drag, isActive }: any) => (
-    <TouchableOpacity
-      style={[
-        styles.card,
-        { borderLeftColor: getStatusBorderColor(item.status) },
-        isActive && styles.dragging,
-      ]}
-      onLongPress={drag}
-      delayLongPress={200}
-      onPress={() => openDetail(item)}
-    >
-      {/* HEADER */}
-      <View style={styles.cardHeader}>
-        <View>
-          <Text style={styles.orderCode}>#{item.orderCode || item.id}</Text>
+  const renderItem = ({ item, drag, isActive }: any) => {
+    const highlight = getHighlightStyle(item.shipperHighlightColor);
+    return (
+      <TouchableOpacity
+        style={[
+          styles.card,
+          { borderLeftColor: getStatusBorderColor(item.status) },
+          highlight && {
+            backgroundColor: highlight.backgroundColor,
+            borderColor: highlight.borderColor,
+          },
+          isActive && styles.dragging,
+        ]}
+        onLongPress={drag}
+        delayLongPress={200}
+        onPress={() => openDetail(item)}
+      >
+        {/* HEADER */}
+        <View style={styles.cardHeader}>
+          <View>
+            <Text style={styles.orderCode}>#{item.orderCode || item.id}</Text>
 
-          <Text
-            style={[styles.department, getDeptTextColor(item.department?.code)]}
-          >
-            {item.department?.name || "Không rõ bộ phận"}
+            <Text
+              style={[
+                styles.department,
+                getDeptTextColor(item.department?.code),
+              ]}
+            >
+              {item.department?.name || "Không rõ bộ phận"}
+            </Text>
+          </View>
+
+          <View style={[styles.statusBadge, statusColor(item.status)]}>
+            <Text style={[styles.statusText, statusTextColor(item.status)]}>
+              {statusLabel(item.status)}
+            </Text>
+          </View>
+        </View>
+
+        {/* COMPANY */}
+        <Text style={styles.company} numberOfLines={2}>
+          {item.company}
+        </Text>
+
+        <View style={styles.deliveryBox}>
+          <Ionicons name="time-outline" size={16} color="#92400e" />
+
+          <Text style={styles.deliveryText}>
+            {item.time || "Chưa có giờ"} • {item.date || "Chưa có ngày"}
           </Text>
         </View>
 
-        <View style={[styles.statusBadge, statusColor(item.status)]}>
-          <Text style={[styles.statusText, statusTextColor(item.status)]}>
-            {statusLabel(item.status)}
+        {/* ADDRESS */}
+        <View style={styles.row}>
+          <Ionicons name="location-outline" size={16} color="#6b7280" />
+          <Text style={styles.address} numberOfLines={2}>
+            {item.address}
           </Text>
         </View>
-      </View>
 
-      {/* COMPANY */}
-      <Text style={styles.company} numberOfLines={2}>
-        {item.company}
-      </Text>
+        {/* FOOTER */}
+        <View style={styles.cardFooter}>
+          <View style={styles.contactBox}>
+            <Ionicons name="person-outline" size={14} color="#9ca3af" />
 
-      <View style={styles.deliveryBox}>
-        <Ionicons name="time-outline" size={16} color="#92400e" />
+            <Text style={styles.receiverName} numberOfLines={2}>
+              {item.contact || "Chưa có"}
+            </Text>
+          </View>
 
-        <Text style={styles.deliveryText}>
-          {item.time || "Chưa có giờ"} •{" "}
-          {item.date || "Chưa có ngày"}
-        </Text>
-      </View>
-
-      {/* ADDRESS */}
-      <View style={styles.row}>
-        <Ionicons name="location-outline" size={16} color="#6b7280" />
-        <Text style={styles.address} numberOfLines={2}>
-          {item.address}
-        </Text>
-      </View>
-
-      {/* FOOTER */}
-      <View style={styles.cardFooter}>
-        <Text style={styles.purpose} numberOfLines={2}>
-          {item.purpose}
-        </Text>
-
-        <Text style={styles.receiver} numberOfLines={1}>
-          {item.receiverName || "Chưa phân công"}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+          <Text style={styles.purpose} numberOfLines={2}>
+            {item.purpose}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right", "bottom"]}>
       {/* SEARCH */}
       <View style={styles.searchBox}>
         <Ionicons name="search" size={18} color="#6b7280" />
@@ -227,6 +285,14 @@ export default function OrderListScreen({ navigation }: any) {
             >
               {tab.label}
             </Text>
+
+            {tab.key === "PENDING_GROUP" && pendingOrdersCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {pendingOrdersCount > 99 ? "99+" : pendingOrdersCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         ))}
       </View>
@@ -240,21 +306,39 @@ export default function OrderListScreen({ navigation }: any) {
           keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
           onDragEnd={onDragEnd}
-          refreshing={refreshing}
-          onRefresh={onRefresh}
           onEndReached={loadMore}
           onEndReachedThreshold={0.4}
           activationDistance={20}
-          ListFooterComponent={
-            loadingMore ? (
-              <ActivityIndicator
-                style={{ marginVertical: 16 }}
-                size="small"
-                color="#2563eb"
-              />
-            ) : null
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#2563eb"]}
+            />
           }
-          contentContainerStyle={{ paddingBottom: 30 }}
+          ListFooterComponent={() => {
+            if (loadingMore) {
+              return (
+                <View style={styles.footer}>
+                  <ActivityIndicator size="small" color="#2563eb" />
+                  <Text style={styles.footerText}>Đang tải thêm...</Text>
+                </View>
+              );
+            }
+
+            if (!hasMore && orders.length > 0) {
+              return (
+                <View style={styles.footer}>
+                  <Text style={styles.footerDone}>
+                    Đã hiển thị tất cả đơn hàng
+                  </Text>
+                </View>
+              );
+            }
+
+            return null;
+          }}
+          contentContainerStyle={{ paddingBottom: tabHeight + 60 }}
         />
       )}
     </SafeAreaView>
@@ -284,19 +368,25 @@ const styles = StyleSheet.create({
 
   tabs: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    paddingHorizontal: 12,
     marginBottom: 10,
+    gap: 8,
   },
 
   tab: {
     paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 20,
     backgroundColor: "#e5e7eb",
+    position: "relative",
   },
 
   tabActive: {
     backgroundColor: "#2563eb",
+    shadowColor: "#2563eb",
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2,
   },
 
   tabText: {
@@ -317,6 +407,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
 
     borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
 
     shadowColor: "#000",
     shadowOpacity: 0.05,
@@ -344,7 +436,7 @@ const styles = StyleSheet.create({
   orderCode: {
     fontWeight: "700",
     fontSize: 15,
-    color: "#0343c4"
+    color: "#0343c4",
   },
 
   company: {
@@ -368,20 +460,28 @@ const styles = StyleSheet.create({
   cardFooter: {
     marginTop: 8,
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+
+  contactBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 4,
+  },
+
+  receiverName: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151",
+    flex: 1,
   },
 
   purpose: {
     fontSize: 12,
-    color: "#ff1616",
+    color: "#ef4444",
     flex: 1,
-    paddingRight: 6,
-  },
-
-  receiver: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#374151",
+    textAlign: "right",
   },
 
   statusBadge: {
@@ -415,5 +515,42 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#92400e",
+  },
+
+  footer: {
+    paddingVertical: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+
+  footerText: {
+    fontSize: 13,
+    color: "#6b7280",
+  },
+
+  footerDone: {
+    fontSize: 13,
+    color: "#9ca3af",
+    fontStyle: "italic",
+  },
+
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -6,
+    backgroundColor: "#ef4444",
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+
+  badgeText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "700",
   },
 });

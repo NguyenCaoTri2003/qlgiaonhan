@@ -3,12 +3,13 @@ import { HttpClient } from "@angular/common/http";
 import { AuthService } from "./auth.service";
 import { Order, LocationData, FilterType } from "../type/models";
 import { tap } from "rxjs";
+import { environment } from "../environments/environment";
 
 @Injectable({ providedIn: "root" })
 export class OrderService {
   private http = inject(HttpClient);
   private authService = inject(AuthService);
-  private API = "http://localhost:5000/api";
+  private API = environment.API_URL;
 
   orderListFilter = signal<FilterType>("ALL");
 
@@ -47,6 +48,32 @@ export class OrderService {
     this._orders.set([]);
   }
 
+  // loadOrders(
+  //   page: number = 1,
+  //   limit: number = 20,
+  //   search: string = "",
+  //   dept: string = "",
+  //   filter: string = "ALL",
+  // ) {
+  //   this.loading.set(true);
+
+  //   this.http
+  //     .get<any>(
+  //       `${this.API}/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}&filter=${filter}`,
+  //     )
+  //     .subscribe({
+  //       next: (res) => {
+  //         this._orders.set(res.data);
+  //         this._totalPages.set(res.totalPages);
+  //         this.loading.set(false);
+  //       },
+  //       error: (err) => {
+  //         console.error("Load orders error:", err);
+  //         this.loading.set(false);
+  //       },
+  //     });
+  // }
+
   loadOrders(
     page: number = 1,
     limit: number = 20,
@@ -56,21 +83,17 @@ export class OrderService {
   ) {
     this.loading.set(true);
 
-    this.http
+    return this.http
       .get<any>(
         `${this.API}/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}&filter=${filter}`,
       )
-      .subscribe({
-        next: (res) => {
+      .pipe(
+        tap((res) => {
           this._orders.set(res.data);
           this._totalPages.set(res.totalPages);
           this.loading.set(false);
-        },
-        error: (err) => {
-          console.error("Load orders error:", err);
-          this.loading.set(false);
-        },
-      });
+        }),
+      );
   }
 
   getOrderDetail(id: number) {

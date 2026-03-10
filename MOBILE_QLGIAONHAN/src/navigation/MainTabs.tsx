@@ -7,11 +7,16 @@ import ProfileScreen from "../screens/ProfileScreen";
 import { Ionicons } from "@expo/vector-icons";
 import useNotifications from "../hooks/useNotifications";
 import OrdersStack from "./OrdersStack";
+import NotificationScreen from "../screens/NotificationScreen";
+import NotificationsStack from "./NotificationsStack";
+import { useNotificationContext } from "../contexts/NotificationContext";
+import { useOrderContext } from "../contexts/OrderContext";
 
 const Tab = createBottomTabNavigator();
 
 export default function MainTabs() {
-  const { unreadCount } = useNotifications();
+  const { unreadCount } = useNotificationContext();
+  const { pendingOrdersCount } = useOrderContext();
 
   return (
     <Tab.Navigator
@@ -33,18 +38,37 @@ export default function MainTabs() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
           ),
-          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
         }}
       />
 
       <Tab.Screen
         name="Orders"
         component={OrdersStack}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            navigation.navigate("Orders", {
+              screen: "OrderList",
+            });
+          },
+        })}
         options={{
           title: "Đơn giao nhận",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="list-outline" size={size} color={color} />
           ),
+          tabBarBadge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined,
+        }}
+      />
+
+      <Tab.Screen
+        name="Notifications"
+        component={NotificationsStack}
+        options={{
+          title: "Thông báo",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="notifications-outline" size={size} color={color} />
+          ),
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
         }}
       />
 
@@ -52,7 +76,7 @@ export default function MainTabs() {
         name="Profile"
         component={ProfileScreen}
         options={{
-          title: "Đơn giao nhận",
+          title: "Trang cá nhân",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />
           ),

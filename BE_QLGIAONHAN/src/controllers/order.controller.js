@@ -226,6 +226,69 @@ exports.getAllOrders = async (req, res) => {
   }
 };
 
+exports.getOrderCounts = async (req, res) => {
+  try {
+    const user = req.user || {};
+    const userId = user.id || null;
+    const role = user.role || "";
+
+    if (!["QL", "NVGN", "NVADMIN"].includes(role)) {
+      return res.status(403).json({ message: "Không có quyền xem đơn" });
+    }
+
+    let where = [];
+    let params = [];
+
+    if (role === "NVGN") {
+      where.push("shipper_id = ?");
+      params.push(userId);
+
+      where.push("status != 'SUPPLEMENT_REQUIRED'");
+    }
+
+    if (role === "NVADMIN") {
+      where.push("created_by = ?");
+      params.push(userId);
+    }
+
+    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const [rows] = await pool.query(
+      `
+      SELECT
+        COUNT(*) as ALL_COUNT,
+
+        SUM(
+          CASE
+            WHEN status IN ('PENDING','ASSIGNED','PROCESSING','SUPPLEMENT_REQUIRED')
+            THEN 1 ELSE 0
+          END
+        ) as PENDING_GROUP,
+
+        SUM(
+          CASE
+            WHEN status IN ('COMPLETED','FINISHED')
+            THEN 1 ELSE 0
+          END
+        ) as DONE_GROUP
+
+      FROM nhigia_logistics_orders
+      ${whereSQL}
+      `,
+      params,
+    );
+
+    res.json({
+      ALL: rows[0].ALL_COUNT || 0,
+      PENDING_GROUP: rows[0].PENDING_GROUP || 0,
+      DONE_GROUP: rows[0].DONE_GROUP || 0,
+    });
+  } catch (err) {
+    console.error("Get order counts error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 exports.createOrder = async (req, res) => {
   const connection = await pool.getConnection();
   try {
@@ -871,7 +934,12 @@ exports.assignReceiver = async (req, res) => {
       `INSERT INTO nhigia_logistics_notifications
        (timestamp, message, read_status, target_role, target_email)
        VALUES (?, ?, 0, ?, ?)`,
-      [now, `Bạn được giao đơn hàng mới: ${order_code}`, "NVGN", receiver_email],
+      [
+        now,
+        `Bạn được giao đơn hàng mới: ${order_code}`,
+        "NVGN",
+        receiver_email,
+      ],
     );
 
     res.json({ message: "Assigned successfully" });
@@ -953,7 +1021,15 @@ exports.shipperReject = async (req, res) => {
       (timestamp, user_email, user_name, user_id, action, order_id, details)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-      [now, user.email, user.name, user.id, "SHIPPER_REJECTED", req.params.id, req.body.reason],
+      [
+        now,
+        user.email,
+        user.name,
+        user.id,
+        "SHIPPER_REJECTED",
+        req.params.id,
+        req.body.reason,
+      ],
     );
 
     res.json({ message: "Shipper rejected" });
@@ -1085,7 +1161,15 @@ exports.shipperComplete = async (req, res) => {
       (timestamp, user_email, user_name, user_id, action, order_id, details)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-      [now, user.email, user.name, user.id, "SHIPPER_COMPLETE", orderId, "Shipper hoàn tất đơn"],
+      [
+        now,
+        user.email,
+        user.name,
+        user.id,
+        "SHIPPER_COMPLETE",
+        orderId,
+        "Shipper hoàn tất đơn",
+      ],
     );
 
     await connection.commit();
@@ -1119,13 +1203,21 @@ exports.qlRequestSupplement = async (req, res) => {
   );
 
   await pool.query(
-      `
+    `
       INSERT INTO nhigia_logistics_logs
       (timestamp, user_email, user_name, user_id, action, order_id, details)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-      [now, user.email, user.name, user.id, "SUPPLEMENT_REQUIRED", req.params.id, `Trưởng phòng yêu cầu bổ sung: ${req.body.note}`],
-    );
+    [
+      now,
+      user.email,
+      user.name,
+      user.id,
+      "SUPPLEMENT_REQUIRED",
+      req.params.id,
+      `Trưởng phòng yêu cầu bổ sung: ${req.body.note}`,
+    ],
+  );
 
   res.json({ message: "Requested supplement" });
 };
@@ -1143,13 +1235,21 @@ exports.shipperReturnSupplement = async (req, res) => {
   );
 
   await pool.query(
-      `
+    `
       INSERT INTO nhigia_logistics_logs
       (timestamp, user_email, user_name, user_id, action, order_id, details)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-      [now, user.email, user.name, user.id, "SUPPLEMENT_REQUIRED", req.params.id, `Shipper yêu cầu bổ sung: ${req.body.note}`],
-    );
+    [
+      now,
+      user.email,
+      user.name,
+      user.id,
+      "SUPPLEMENT_REQUIRED",
+      req.params.id,
+      `Shipper yêu cầu bổ sung: ${req.body.note}`,
+    ],
+  );
 
   res.json({ message: "Shipper requested supplement" });
 };
@@ -1160,7 +1260,8 @@ exports.getOrderDetail = async (req, res) => {
     const user = req.user || {};
     const token = user.nhigia_token;
 
-    // ===== Load order =====
+    console.log("role: ", user.role);
+
     const [[r]] = await pool.query(
       `
       SELECT *
@@ -1174,7 +1275,17 @@ exports.getOrderDetail = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // ===== Load attachments table =====
+    const allowedStatuses = ["ASSIGNED", "COMPLETED", "FINISHED"];
+
+    if (
+      user.role === "NVGN" &&
+      (r.shipper_id !== user.id || !allowedStatuses.includes(r.status))
+    ) {
+      return res.status(403).json({
+        message: "Bạn không có quyền xem đơn này",
+      });
+    }
+
     const [attachmentRows] = await pool.query(
       `
       SELECT id, order_id, name, qty, checked
@@ -1192,7 +1303,6 @@ exports.getOrderDetail = async (req, res) => {
       checked: !!a.checked,
     }));
 
-    // ===== Load files =====
     const [fileRows] = await pool.query(
       `
       SELECT id, file_name, file_type, file_path, type
@@ -1227,7 +1337,6 @@ exports.getOrderDetail = async (req, res) => {
       }
     });
 
-    // ===== Delivery location =====
     const deliveryLocation =
       r.completion_lat && r.completion_lng
         ? {
@@ -1236,7 +1345,6 @@ exports.getOrderDetail = async (req, res) => {
           }
         : null;
 
-    // ===== Department cache logic =====
     let departments = [];
 
     if (!deptCache || Date.now() - deptCacheTime > 10 * 60 * 1000) {
@@ -1252,7 +1360,6 @@ exports.getOrderDetail = async (req, res) => {
       deptMap[d.id] = d;
     });
 
-    // ===== Map response =====
     const mapped = {
       id: String(r.id),
 
@@ -1324,7 +1431,7 @@ exports.getOrderDetail = async (req, res) => {
       deliveryLocation,
     };
 
-    console.log("Map: ", mapped);
+    // console.log("Map: ", mapped);
 
     res.json(mapped);
   } catch (err) {

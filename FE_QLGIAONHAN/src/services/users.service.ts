@@ -1,9 +1,10 @@
 import { HttpClient } from "@angular/common/http";
 import { Injectable } from "@angular/core";
+import { environment } from "../environments/environment";
 
 @Injectable({ providedIn: "root" })
 export class UsersService {
-  private API = "http://localhost:5000/api";
+  private API = environment.API_URL;
   constructor(private http: HttpClient) {}
 
   getSenders() {

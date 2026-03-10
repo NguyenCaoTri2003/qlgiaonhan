@@ -1,12 +1,13 @@
 import { Injectable, signal, computed } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { User, UserRole } from "../type/models";
+import { environment } from "../environments/environment";
 
 @Injectable({
   providedIn: "root",
 })
 export class AuthService {
-  private API = "http://localhost:5000/api";
+  private API = environment.API_URL;
 
   private _currentUser = signal<User | null>(null);
 

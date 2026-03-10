@@ -23,3 +23,35 @@ export const getDeptTextColor = (code?: string) => {
       return { color: "#6b7280" };
   }
 };
+
+export const getDeptStyle = (code?: string) => {
+  switch (code) {
+    case "VSVN":
+      return {
+        backgroundColor: "#eff6ff", // blue-50
+        borderColor: "#bfdbfe",     // blue-200
+        textColor: "#1d4ed8",       // blue-700
+      };
+
+    case "GPLD":
+      return {
+        backgroundColor: "#ecfdf5", // green-50
+        borderColor: "#bbf7d0",     // green-200
+        textColor: "#047857",       // green-700
+      };
+
+    case "VSNN":
+      return {
+        backgroundColor: "#f5f3ff", // violet-50
+        borderColor: "#ddd6fe",     // violet-200
+        textColor: "#6d28d9",       // violet-700
+      };
+
+    default:
+      return {
+        backgroundColor: "#f3f4f6",
+        borderColor: "#e5e7eb",
+        textColor: "#4b5563",
+      };
+  }
+};

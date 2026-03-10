@@ -44,6 +44,7 @@ const uploadSignature = createUploader({
 });
 
 router.get("/", ordersController.getAllOrders);
+router.get("/counts", ordersController.getOrderCounts);
 router.get("/:id", ordersController.getOrderDetail);
 
 router.post(
@@ -102,5 +103,6 @@ router.post(
 router.put("/:id/resolve", ordersController.resolveRequest);
 
 router.put("/:id/highlight", ordersController.updateColor);
+
 
 module.exports = router;

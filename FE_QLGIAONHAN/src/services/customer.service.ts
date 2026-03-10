@@ -1,11 +1,12 @@
 import { Injectable, signal, inject } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { CustomerData } from "../type/models";
+import { environment } from "../environments/environment";
 
 @Injectable({ providedIn: "root" })
 export class CustomerService {
   private http = inject(HttpClient);
-  private API = "http://localhost:5000/api";
+  private API = environment.API_URL;
 
   private _customers = signal<CustomerData[]>([]);
   customers = this._customers.asReadonly();

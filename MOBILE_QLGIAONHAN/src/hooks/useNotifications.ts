@@ -1,30 +1,45 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { notificationService } from "../services/notification.service";
 
 export default function useNotifications() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const loadNotifications = async () => {
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const loadNotifications = async (pageNum = 1, loadMore = false) => {
     try {
-      const data = await notificationService.getNotifications();
+      const res = await notificationService.getNotifications(pageNum, 10);
 
-      setNotifications(data);
+      const newData = res.data || [];
 
-      const unread = data.filter((n: any) => n.read === 0).length;
-      setUnreadCount(unread);
+      if (loadMore) {
+        setNotifications((prev) => [...prev, ...newData]);
+      } else {
+        setNotifications(newData);
+      }
+
+      setPage(pageNum);
+      setTotalPages(res.totalPages || 1);
+
+      setUnreadCount(res.unreadCount || 0);
+
     } catch (err) {
       console.log("Notification error", err);
     }
   };
 
-  useEffect(() => {
-    loadNotifications();
-  }, []);
+  const loadMore = async () => {
+    if (page >= totalPages) return;
+    await loadNotifications(page + 1, true);
+  };
 
   return {
     notifications,
     unreadCount,
-    reload: loadNotifications,
+    reload: () => loadNotifications(1),
+    loadMore,
+    hasMore: page < totalPages,
   };
 }
