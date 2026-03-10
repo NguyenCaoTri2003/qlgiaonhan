@@ -6,6 +6,7 @@ import OrderListScreen from "../screens/OrderListScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import { Ionicons } from "@expo/vector-icons";
 import useNotifications from "../hooks/useNotifications";
+import OrdersStack from "./OrdersStack";
 
 const Tab = createBottomTabNavigator();
 
@@ -38,7 +39,7 @@ export default function MainTabs() {
 
       <Tab.Screen
         name="Orders"
-        component={OrderListScreen}
+        component={OrdersStack}
         options={{
           title: "Đơn giao nhận",
           tabBarIcon: ({ color, size }) => (

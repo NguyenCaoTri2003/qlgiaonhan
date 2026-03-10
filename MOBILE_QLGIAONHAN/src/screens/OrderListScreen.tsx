@@ -13,7 +13,12 @@ import { Ionicons } from "@expo/vector-icons";
 import debounce from "lodash.debounce";
 
 import { orderService } from "../services/order.service";
-import { statusColor, statusLabel, statusTextColor } from "../utils/statusOrder";
+import {
+  getStatusBorderColor,
+  statusColor,
+  statusLabel,
+  statusTextColor,
+} from "../utils/statusOrder";
 import { authService } from "../services/auth.service";
 import { getDeptColor, getDeptTextColor } from "../utils/departmentColor";
 
@@ -32,10 +37,6 @@ export default function OrderListScreen({ navigation }: any) {
   const [filter, setFilter] = useState("ALL");
 
   const hasMore = page < totalPages;
-
-  // ==============================
-  // LOAD ORDERS
-  // ==============================
 
   const fetchOrders = async (
     pageNum = 1,
@@ -74,17 +75,9 @@ export default function OrderListScreen({ navigation }: any) {
     }
   };
 
-  // ==============================
-  // INITIAL LOAD
-  // ==============================
-
   useEffect(() => {
     fetchOrders(1);
   }, [filter]);
-
-  // ==============================
-  // SEARCH DEBOUNCE
-  // ==============================
 
   const debouncedSearch = useCallback(
     debounce((text) => {
@@ -98,27 +91,15 @@ export default function OrderListScreen({ navigation }: any) {
     debouncedSearch(text);
   };
 
-  // ==============================
-  // REFRESH
-  // ==============================
-
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchOrders(1);
   };
 
-  // ==============================
-  // LOAD MORE
-  // ==============================
-
   const loadMore = async () => {
     if (!hasMore || loadingMore) return;
     await fetchOrders(page + 1, true);
   };
-
-  // ==============================
-  // DRAG SORT
-  // ==============================
 
   const onDragEnd = async ({ data }: any) => {
     setOrders(data);
@@ -135,23 +116,15 @@ export default function OrderListScreen({ navigation }: any) {
     }
   };
 
-  // ==============================
-  // OPEN DETAIL
-  // ==============================
-
   const openDetail = (order: any) => {
     navigation.navigate("OrderDetail", { id: order.id });
   };
-
-  // ==============================
-  // RENDER ORDER CARD
-  // ==============================
 
   const renderItem = ({ item, drag, isActive }: any) => (
     <TouchableOpacity
       style={[
         styles.card,
-        { borderLeftColor: getDeptColor(item.department?.code) },
+        { borderLeftColor: getStatusBorderColor(item.status) },
         isActive && styles.dragging,
       ]}
       onLongPress={drag}
@@ -182,6 +155,15 @@ export default function OrderListScreen({ navigation }: any) {
         {item.company}
       </Text>
 
+      <View style={styles.deliveryBox}>
+        <Ionicons name="time-outline" size={16} color="#92400e" />
+
+        <Text style={styles.deliveryText}>
+          {item.time || "Chưa có giờ"} •{" "}
+          {item.date || "Chưa có ngày"}
+        </Text>
+      </View>
+
       {/* ADDRESS */}
       <View style={styles.row}>
         <Ionicons name="location-outline" size={16} color="#6b7280" />
@@ -202,10 +184,6 @@ export default function OrderListScreen({ navigation }: any) {
       </View>
     </TouchableOpacity>
   );
-
-  // ==============================
-  // UI
-  // ==============================
 
   return (
     <SafeAreaView style={styles.container}>
@@ -366,6 +344,7 @@ const styles = StyleSheet.create({
   orderCode: {
     fontWeight: "700",
     fontSize: 15,
+    color: "#0343c4"
   },
 
   company: {
@@ -394,7 +373,7 @@ const styles = StyleSheet.create({
 
   purpose: {
     fontSize: 12,
-    color: "#374151",
+    color: "#ff1616",
     flex: 1,
     paddingRight: 6,
   },
@@ -419,5 +398,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     textAlign: "center",
+  },
+  deliveryBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fef3c7",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+    gap: 6,
+  },
+
+  deliveryText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#92400e",
   },
 });

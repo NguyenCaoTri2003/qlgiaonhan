@@ -78,6 +78,29 @@ export function statusTextColor(status: string) {
   }
 }
 
+ export const getStatusBorderColor = (status: string) => {
+  switch (status) {
+    case "PENDING":
+      return "#b91c1c"; 
+    case "ASSIGNED":
+      return "#1d4ed8";
+    case "PROCESSING":
+      return "#a16207"; 
+    case "COMPLETED":
+      return "#6d28d9"; 
+    case "FINISHED":
+      return "#15803d"; 
+    case "REJECTED":
+      return "#374151"
+    case "SUPPLEMENT_REQUIRED":
+      return "#c2410c"
+    case "INCOMPLETE":
+        return "#dc2626"
+    default:
+      return "#d1d5db";
+  }
+};
+
 export function statusLabel(status: string) {
   const map: Record<string, string> = {
     PENDING: "Chờ tiếp nhận",
