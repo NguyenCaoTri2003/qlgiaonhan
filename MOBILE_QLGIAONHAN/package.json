@@ -12,6 +12,8 @@
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "^8.6.0",
+    "@react-native-firebase/app": "^23.8.6",
+    "@react-native-firebase/messaging": "^23.8.6",
     "@react-native-picker/picker": "^2.11.4",
     "@react-navigation/bottom-tabs": "^7.15.5",
     "@react-navigation/native": "^7.1.33",
@@ -21,6 +23,7 @@
     "expo-file-system": "~55.0.10",
     "expo-image-picker": "~55.0.11",
     "expo-location": "~55.1.2",
+    "expo-notifications": "~55.0.11",
     "expo-sharing": "~55.0.11",
     "expo-status-bar": "~55.0.4",
     "lottie-react-native": "~7.3.4",
@@ -31,7 +34,8 @@
     "react-native-reanimated": "4.2.1",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",
-    "react-native-signature-canvas": "^5.0.2"
+    "react-native-signature-canvas": "^5.0.2",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@types/lodash.debounce": "^4.0.9",

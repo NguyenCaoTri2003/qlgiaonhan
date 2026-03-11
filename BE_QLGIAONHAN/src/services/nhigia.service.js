@@ -2,7 +2,7 @@ const callNhiGia = require("../utils/callNhiGia");
 
 const axios = require("axios");
 
-const NHIGIA_API = process.env.API_URL|| "https://demoapi.nhigia.vn/quanli/apigiaonhan/apigiaonhan.php";
+const NHIGIA_API = process.env.API_URL|| "http://demoapi.nhigia.vn/quanli/apigiaonhan/apigiaonhan.php";
 
 exports.fetchNhigiaOrders = async () => {
   const response = await axios.post(

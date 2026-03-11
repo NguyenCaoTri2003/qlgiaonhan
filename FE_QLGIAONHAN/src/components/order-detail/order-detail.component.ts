@@ -1145,6 +1145,7 @@ export class OrderDetailComponent implements OnInit {
 
   currentUserRole = this.authService.userRole;
   selectedShipper = "";
+  forbidden = signal(false);
 
   ngOnInit() {
     if (this.order()?.attachments) {

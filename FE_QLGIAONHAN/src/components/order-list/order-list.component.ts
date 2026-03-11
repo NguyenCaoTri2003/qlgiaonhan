@@ -1,4 +1,4 @@
-import { Component, inject, output, computed, signal } from "@angular/core";
+import { Component, inject, output, computed, signal, ViewChild } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import {
@@ -20,6 +20,8 @@ import { OrderFormComponent } from "../order-form/order-form.component";
 import { DepartmentService } from "../../services/department.service";
 import { LoadingComponent } from "../../app/shared/loading/loading.component";
 import { effect } from "@angular/core";
+import { ActivatedRoute, Router } from "@angular/router";
+import { ToastComponent } from "../../app/shared/toast/toast.component";
 
 @Component({
   selector: "app-order-list",
@@ -31,6 +33,7 @@ import { effect } from "@angular/core";
     OrderDetailComponent,
     OrderFormComponent,
     LoadingComponent,
+    ToastComponent
   ],
   template: `
     <div class="flex justify-between items-center mb-4">
@@ -212,7 +215,7 @@ import { effect } from "@angular/core";
                 <div
                   [class]="
                     'absolute left-0 top-0 bottom-0 w-1 ' +
-                      getStatusColorClass(order.status)
+                    getStatusColorClass(order.status)
                   "
                 ></div>
 
@@ -555,7 +558,7 @@ import { effect } from "@angular/core";
         @if (selectedOrder()) {
           <app-order-detail
             [order]="selectedOrder()!"
-            (close)="selectedOrder.set(null)"
+            (close)="closeDetail()"
             (edit)="startEdit($event)"
           />
         }
@@ -794,10 +797,12 @@ import { effect } from "@angular/core";
           <app-loading></app-loading>
         }
       </div>
+      <app-toast></app-toast>
     </div>
   `,
 })
 export class OrderListComponent {
+  @ViewChild(ToastComponent) toast!: ToastComponent;
   select = output<Order>();
   create = output<void>();
 
@@ -831,6 +836,9 @@ export class OrderListComponent {
 
   isShipper = computed(() => this.authService.userRole() === "NVGN");
 
+  route = inject(ActivatedRoute);
+  router = inject(Router);
+
   private timer: any;
 
   private searchEffect = effect(
@@ -853,9 +861,36 @@ export class OrderListComponent {
     { allowSignalWrites: true },
   );
 
+  // ngOnInit() {
+  //   this.departmentService.loadDepartments();
+  //   this.load();
+  // }
+
   ngOnInit() {
     this.departmentService.loadDepartments();
     this.load();
+
+    this.route.queryParams.subscribe((params) => {
+      const id = params["orderId"];
+      if (!id) return;
+
+      this.orderService.getOrderDetail(id).subscribe({
+        next: (order) => {
+          this.selectedOrder.set(order);
+        },
+        error: (err) => {
+          if (err.status === 403) {
+            this.toast.show("Bạn không có quyền xem đơn này", "error");
+
+            // xoá orderId khỏi URL
+            this.router.navigate([], {
+              queryParams: { orderId: null },
+              queryParamsHandling: "merge",
+            });
+          }
+        },
+      });
+    });
   }
 
   nextPage() {
@@ -961,6 +996,15 @@ export class OrderListComponent {
 
   closeAction() {
     this.selectedActionOrder.set(null);
+  }
+
+  closeDetail() {
+    this.selectedOrder.set(null);
+
+    this.router.navigate([], {
+      queryParams: { orderId: null },
+      queryParamsHandling: "merge",
+    });
   }
 
   canShowAction(o: Order): boolean {

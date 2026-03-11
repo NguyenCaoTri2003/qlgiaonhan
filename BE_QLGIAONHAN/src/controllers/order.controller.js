@@ -497,11 +497,18 @@ exports.createOrder = async (req, res) => {
     await connection.query(
       `
       INSERT INTO nhigia_logistics_notifications
-      (timestamp, message, read_status, target_role)
-      VALUES (?, ?, 0, ?)
+      (timestamp, message, read_status, target_role, order_id)
+      VALUES (?, ?, 0, ?, ?)
       `,
-      [now, `Đơn hàng mới ${orderCode} cần điều phối`, "QL"],
+      [now, `Đơn hàng mới ${orderCode} cần điều phối`, "QL", orderId],
     );
+
+    const message = `Đơn hàng mới ${orderCode} cần điều phối`;
+
+    global.io.to("role_QL").emit("newNotification", {
+      message,
+      orderId,
+    });
 
     await connection.commit();
 
@@ -909,47 +916,47 @@ exports.assignReceiver = async (req, res) => {
   try {
     await pool.query(
       `UPDATE nhigia_logistics_orders
-       SET sort_index = sort_index + 1
-       WHERE shipper_id = ?`,
+        SET sort_index = sort_index + 1
+        WHERE shipper_id = ?`,
       [receiver_id],
     );
 
     await pool.query(
       `UPDATE nhigia_logistics_orders
-       SET shipper_id = ?, 
-           receiver = ?, 
-           receiver_name = ?,
-           sort_index = 0,
-           status = ?, 
-           status_update_date = ?,
-           updated_at = NOW(),
-           assigned_at = NOW()
-       WHERE id = ?`,
+        SET shipper_id = ?, 
+            receiver = ?, 
+            receiver_name = ?,
+            sort_index = 0,
+            status = ?, 
+            status_update_date = ?,
+            updated_at = NOW(),
+            assigned_at = NOW()
+        WHERE id = ?`,
       [receiver_id, receiver_email, receiver_name, "ASSIGNED", now, orderId],
     );
 
     await pool.query(
       `UPDATE nhigia_logistics_attachments
-       SET checked = 0
-       WHERE order_id = ?`,
+        SET checked = 0
+        WHERE order_id = ?`,
       [orderId],
     );
 
     if (attachments && attachments.length > 0) {
       await pool.query(
         `UPDATE nhigia_logistics_attachments
-         SET checked = 1
-         WHERE id IN (?) AND order_id = ?`,
+          SET checked = 1
+          WHERE id IN (?) AND order_id = ?`,
         [attachments, orderId],
       );
     }
 
     await pool.query(
       `
-      INSERT INTO nhigia_logistics_logs
-      (timestamp, user_email, user_name, user_id, action, order_id, details)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
+        INSERT INTO nhigia_logistics_logs
+        (timestamp, user_email, user_name, user_id, action, order_id, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
       [
         now,
         user.email,
@@ -963,8 +970,8 @@ exports.assignReceiver = async (req, res) => {
 
     await pool.query(
       `INSERT INTO nhigia_logistics_notifications
-       (timestamp, message, read_status, target_role, target_email, order_id)
-       VALUES (?, ?, 0, ?, ?, ?)`,
+        (timestamp, message, read_status, target_role, target_email, order_id)
+        VALUES (?, ?, 0, ?, ?, ?)`,
       [
         now,
         `Bạn được giao đơn hàng mới: ${order_code}`,
@@ -973,6 +980,26 @@ exports.assignReceiver = async (req, res) => {
         orderId,
       ],
     );
+
+    const message = `Bạn được giao đơn hàng mới: ${order_code}`;
+
+    global.io.to("user_" + receiver_id).emit("newNotification", {
+      message,
+      orderId,
+    });
+
+    const [rows] = await pool.query(
+      `SELECT COUNT(*) as total
+   FROM nhigia_logistics_orders
+   WHERE shipper_id = ?
+   AND status IN ('ASSIGNED','PROCESSING')`,
+      [receiver_id],
+    );
+
+    global.io.to("user_" + receiver_id).emit("orderAssigned", {
+      orderId,
+      pendingOrdersCount: rows[0].total,
+    });
 
     res.json({ message: "Assigned successfully" });
   } catch (err) {
@@ -1317,6 +1344,12 @@ exports.getOrderDetail = async (req, res) => {
     ) {
       return res.status(403).json({
         message: "Bạn không có quyền xem đơn này",
+      });
+    }
+
+    if (user.role === "NVADMIN" && r.created_by !== user.id) {
+      return res.status(403).json({
+        message: "Bạn chỉ được xem đơn do mình tạo",
       });
     }
 

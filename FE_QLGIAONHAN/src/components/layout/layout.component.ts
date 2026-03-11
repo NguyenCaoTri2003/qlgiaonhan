@@ -1,10 +1,21 @@
-import { Component, inject, output, signal } from "@angular/core";
+import {
+  Component,
+  inject,
+  output,
+  signal,
+  ElementRef,
+  HostListener,
+  ViewChild,
+  effect,
+} from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { AuthService } from "../../services/auth.service";
 import { NotificationService } from "../../services/notification.service";
 import { ViewStateService } from "../../services/view-state.service";
 import { RouterOutlet } from "@angular/router";
 import { Router } from "@angular/router";
+import { SocketService } from "../../services/socket.service";
+import { ToastService } from "../../services/toast.service";
 
 @Component({
   selector: "app-layout",
@@ -51,9 +62,9 @@ import { Router } from "@angular/router";
           <!-- User & Notifications -->
           <div class="flex items-center space-x-4">
             <!-- Notification Bell -->
-            <div class="relative">
+            <div class="relative" #notifContainer>
               <button
-                (click)="toggleNotif()"
+                (click)="toggleNotif(); $event.stopPropagation()"
                 class="p-1 rounded-full text-blue-200 hover:text-white focus:outline-none relative transition-colors"
               >
                 <svg
@@ -379,10 +390,33 @@ import { Router } from "@angular/router";
           <router-outlet></router-outlet>
         </main>
       </div>
+
+      <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
+        @for (toast of toastService.toasts(); track toast.id) {
+          <div
+            (click)="openToast(toast)"
+            class="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-xl flex items-start gap-3 cursor-pointer hover:bg-blue-700 min-w-[300px]"
+          >
+            <span class="text-lg">🔔</span>
+
+            <div class="flex-1 text-sm">
+              {{ toast.message }}
+            </div>
+
+            <button
+              (click)="$event.stopPropagation(); toastService.remove(toast.id)"
+              class="text-white/80 hover:text-white text-lg"
+            >
+              ✕
+            </button>
+          </div>
+        }
+      </div>
     </div>
   `,
 })
 export class LayoutComponent {
+  @ViewChild("notifContainer") notifContainer!: ElementRef;
   logout = output<void>();
   navigate = output<string>();
   router = inject(Router);
@@ -398,10 +432,47 @@ export class LayoutComponent {
   showNotif = signal(false);
   isSidebarOpen = signal(false);
 
+  socketService = inject(SocketService);
+  toastService = inject(ToastService);
+
+  elementRef = inject(ElementRef);
+
+  @HostListener("document:click", ["$event"])
+  onClickOutside(event: MouseEvent) {
+    if (!this.showNotif()) return;
+
+    const clickedInside = this.notifContainer?.nativeElement.contains(
+      event.target,
+    );
+
+    if (!clickedInside) {
+      this.showNotif.set(false);
+    }
+  }
+
   getInitial(name?: string): string {
     if (!name) return "A";
     return name.trim().charAt(0).toUpperCase();
   }
+
+  openToast(toast: any) {
+    this.toastService.remove(toast.id);
+    this.openNotification(toast);
+  }
+
+  socketEffect = effect(() => {
+    const user = this.user();
+
+    if (!user) return;
+
+    this.socketService.join(user.id, user.role);
+
+    this.socketService.onNotification((data) => {
+      this.notificationService.loadNotifications(true);
+
+      this.toastService.show(data);
+    });
+  });
 
   ngOnInit() {
     this.notificationService.loadNotifications(true);

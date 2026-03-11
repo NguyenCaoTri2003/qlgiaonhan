@@ -70,7 +70,7 @@ export class NotificationService {
 
   markAllAsRead() {
     this.http
-      .post(`${this.API}/api/notifications/read-all`, {})
+      .post(`${this.API}/notifications/read-all`, {})
       .subscribe(() => {
         this.unreadCount.set(0);
 

@@ -1,4 +1,4 @@
-import "./chunk-TXDUYLVM.js";
+import "./chunk-4MWRP73S.js";
 
 // node_modules/jspdf/node_modules/@babel/runtime/helpers/esm/typeof.js
 function _typeof(o2) {
@@ -14859,7 +14859,7 @@ function(t2) {
     });
   }
   function n() {
-    return (i.DOMPurify ? Promise.resolve(i.DOMPurify) : import("./purify.es-GIQICOTZ.js")).catch(function(t2) {
+    return (i.DOMPurify ? Promise.resolve(i.DOMPurify) : import("./purify.es-WYZRNLPH.js")).catch(function(t2) {
       return Promise.reject(new Error("Could not load dompurify: " + t2));
     }).then(function(t2) {
       return t2.default ? t2.default : t2;
@@ -16036,7 +16036,7 @@ function(t2) {
     ignoreAnimation: true,
     ignoreDimensions: true
   }, d2 = this;
-  return (i.canvg ? Promise.resolve(i.canvg) : import("./index.es-Q4IQKBRJ.js")).catch(function(t3) {
+  return (i.canvg ? Promise.resolve(i.canvg) : import("./index.es-KFP7AVLL.js")).catch(function(t3) {
     return Promise.reject(new Error("Could not load canvg: " + t3));
   }).then(function(t3) {
     return t3.default ? t3.default : t3;
