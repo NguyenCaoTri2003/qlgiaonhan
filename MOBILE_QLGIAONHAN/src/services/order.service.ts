@@ -11,9 +11,10 @@ export const orderService = {
     search = "",
     dept = "",
     filter = "ALL",
+    date = "",
   ) {
     const res = await axiosClient.get(
-      `/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}&filter=${filter}`,
+      `/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}&filter=${filter}&date=${date}`,
     );
 
     return res.data;
@@ -41,7 +42,7 @@ export const orderService = {
 
   async getOrderCounts() {
     const res = await axiosClient.get("/orders/counts");
-    console.log("RES: ", res.data)
+    console.log("RES: ", res.data);
     return res.data;
   },
 
@@ -92,10 +93,15 @@ export const orderService = {
   ) {
     const formData = new FormData();
 
+    console.log("FILES:", files);
+    console.log("SIGNATURE:", signature);
+    console.log("LOCATION:", location);
+    console.log("NOTE:", note);
+
     files.forEach((file) => {
       formData.append("files", {
         uri: file.uri,
-        type: file.type || "image/jpeg",
+        type: file.mimeType || "image/jpeg",
         name: file.fileName || "photo.jpg",
       } as any);
     });

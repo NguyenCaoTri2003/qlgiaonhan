@@ -29,6 +29,16 @@ import {
 } from "../utils/departmentColor";
 import NotFoundView from "../components/NotFoundView";
 import { useNavigation } from "@react-navigation/native";
+import { useOrderContext } from "../contexts/OrderContext";
+import { TextInput } from "react-native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { OrdersStackParamList } from "../navigation/types";
+
+type NavigationType = NativeStackNavigationProp<
+  OrdersStackParamList,
+  "OrderDetail"
+>;
+
 
 export default function OrderDetailScreen({ route }: any) {
   const { id } = route.params;
@@ -45,8 +55,11 @@ export default function OrderDetailScreen({ route }: any) {
   const [missingModal, setMissingModal] = useState(false);
   const [missingDocs, setMissingDocs] = useState<any[]>([]);
 
-  const navigation = useNavigation();
-  // console.log("Order:\n", JSON.stringify(order, null, 2));
+  const navigation = useNavigation<NavigationType>();
+
+  const { reloadOrderCounts } = useOrderContext();
+  const [rejectModal, setRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   const fetchDetail = async () => {
     try {
@@ -86,7 +99,9 @@ export default function OrderDetailScreen({ route }: any) {
   };
 
   const isReadonly =
-    order?.status === "COMPLETED" || order?.status === "FINISHED";
+    order?.status === "COMPLETED" ||
+    order?.status === "FINISHED" ||
+    order?.status === "PROCESSING";
 
   const toggleChecklist = (index: number) => {
     if (isReadonly) return;
@@ -141,13 +156,14 @@ export default function OrderDetailScreen({ route }: any) {
   const acceptWithMissing = async () => {
     try {
       const note =
-        "Thiếu hồ sơ: " +
         missingDocs.map((d) => `${d.name} (${d.qty})`).join(", ");
 
       await orderService.shipperAccept(id, attachments, note);
 
       setMissingModal(false);
-      fetchDetail();
+
+      await reloadOrderCounts();
+      navigation.navigate("OrderList" as never);
     } catch (err) {
       console.log(err);
     }
@@ -162,7 +178,26 @@ export default function OrderDetailScreen({ route }: any) {
       await orderService.shipperReturnSupplement(id, note);
 
       setMissingModal(false);
-      fetchDetail();
+
+      await reloadOrderCounts();
+      navigation.navigate("OrderList" as never);
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  const confirmReject = async () => {
+    if (!rejectReason.trim()) return;
+
+    try {
+      await orderService.shipperReject(id, rejectReason);
+
+      setRejectModal(false);
+      setRejectReason("");
+
+      await reloadOrderCounts();
+
+      navigation.navigate("OrderList" as never);
     } catch (err) {
       console.log(err);
     }
@@ -289,6 +324,15 @@ export default function OrderDetailScreen({ route }: any) {
         )}
 
         {/* ALERTS */}
+
+        {order.missingDocs && (
+          <View style={styles.alertRed}>
+            <Text style={styles.alertRedText}>
+              <Text style={{ fontWeight: "700" }}>Thiếu hồ sơ: </Text>
+              {order.missingDocs}
+            </Text>
+          </View>
+        )}
 
         {order.status === "REJECTED" && order.rejectionReason && (
           <View style={styles.alertRed}>
@@ -495,14 +539,20 @@ export default function OrderDetailScreen({ route }: any) {
               <Text style={styles.btnText}>Nhận đơn</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.btnReject}>
+            <TouchableOpacity
+              style={styles.btnReject}
+              onPress={() => setRejectModal(true)}
+            >
               <Text style={styles.btnText}>Từ chối</Text>
             </TouchableOpacity>
           </>
         )}
 
         {order.status === "PROCESSING" && (
-          <TouchableOpacity style={styles.btnDone}>
+          <TouchableOpacity
+            style={styles.btnDone}
+            onPress={() => navigation.navigate("CompleteOrder", { id })}
+          >
             <Text style={styles.btnText}>Hoàn tất</Text>
           </TouchableOpacity>
         )}
@@ -561,6 +611,49 @@ export default function OrderDetailScreen({ route }: any) {
                 onPress={() => setMissingModal(false)}
               >
                 <Text style={styles.btnBackText}>Trở lại kiểm tra</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={rejectModal} transparent animationType="fade">
+        <View style={styles.modalOverlayReject}>
+          <View style={styles.rejectModalBox}>
+            {/* HEADER */}
+            <View style={styles.rejectHeader}>
+              <Ionicons name="close-circle-outline" size={26} color="#dc2626" />
+              <Text style={styles.rejectTitle}>Từ chối đơn</Text>
+            </View>
+
+            <Text style={styles.rejectSubtitle}>
+              Vui lòng nhập lý do từ chối để hệ thống thông báo lại cho admin.
+            </Text>
+
+            {/* INPUT */}
+            <TextInput
+              placeholder="Nhập lý do từ chối..."
+              value={rejectReason}
+              onChangeText={setRejectReason}
+              multiline
+              style={styles.rejectInput}
+            />
+
+            {/* BUTTONS */}
+            <View style={styles.rejectButtons}>
+              <TouchableOpacity
+                style={styles.rejectConfirmBtn}
+                onPress={confirmReject}
+              >
+                <Ionicons name="close-outline" size={18} color="white" />
+                <Text style={styles.rejectConfirmText}>Xác nhận từ chối</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.rejectCancelBtn}
+                onPress={() => setRejectModal(false)}
+              >
+                <Text style={styles.rejectCancelText}>Huỷ</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1004,5 +1097,82 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#6b7280",
     marginLeft: 4,
+  },
+
+  modalOverlayReject: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+
+  rejectModalBox: {
+    width: "100%",
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 20,
+    elevation: 10,
+  },
+
+  rejectHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+
+  rejectTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  rejectSubtitle: {
+    fontSize: 13,
+    color: "#6b7280",
+    marginBottom: 12,
+  },
+
+  rejectInput: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 10,
+    padding: 12,
+    minHeight: 90,
+    textAlignVertical: "top",
+    fontSize: 14,
+    backgroundColor: "#f9fafb",
+  },
+
+  rejectButtons: {
+    marginTop: 16,
+  },
+
+  rejectConfirmBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#dc2626",
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+
+  rejectConfirmText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+
+  rejectCancelBtn: {
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+
+  rejectCancelText: {
+    color: "#6b7280",
+    fontSize: 14,
   },
 });

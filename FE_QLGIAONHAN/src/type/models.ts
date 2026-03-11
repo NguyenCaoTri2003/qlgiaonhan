@@ -128,3 +128,10 @@ export interface User {
   avatar?: string;
   departmentId?: number;
 }
+
+export interface AttachmentItem {
+  name: string;
+  qty: number;
+  checked: boolean;
+  locked?: boolean;
+}

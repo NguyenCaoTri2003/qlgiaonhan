@@ -25,6 +25,12 @@ import { authService } from "../services/auth.service";
 import { getDeptColor, getDeptTextColor } from "../utils/departmentColor";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useOrderContext } from "../contexts/OrderContext";
+import {
+  formatDate,
+  getDeliveryStatus,
+  getDeliveryStyle,
+} from "../utils/dateUtils";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function OrderListScreen({ navigation, route }: any) {
   const PAGE_SIZE = 10;
@@ -44,6 +50,9 @@ export default function OrderListScreen({ navigation, route }: any) {
   const tabHeight = useBottomTabBarHeight();
   const { pendingOrdersCount } = useOrderContext();
 
+  const [dateFilter, setDateFilter] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
   useEffect(() => {
     if (route.params?.openOrderId) {
       navigation.navigate("OrderDetail", {
@@ -57,6 +66,7 @@ export default function OrderListScreen({ navigation, route }: any) {
     isLoadMore = false,
     keyword = search,
     filterVal = filter,
+    date = dateFilter,
   ) => {
     try {
       if (pageNum === 1 && !isLoadMore) setLoading(true);
@@ -68,6 +78,7 @@ export default function OrderListScreen({ navigation, route }: any) {
         keyword,
         "",
         filterVal,
+        date || "",
       );
 
       const newData = res.data || [];
@@ -96,14 +107,14 @@ export default function OrderListScreen({ navigation, route }: any) {
   );
 
   useEffect(() => {
-    fetchOrders(1, false, search, filter);
-  }, [filter, search]);
+    fetchOrders(1, false, search, filter, dateFilter);
+  }, [filter, search, dateFilter]);
 
   const debouncedSearch = useCallback(
     debounce((text) => {
-      fetchOrders(1, false, text);
+      fetchOrders(1, false, text, filter, dateFilter);
     }, 500),
-    [],
+    [filter, dateFilter],
   );
 
   const getHighlightStyle = (color?: string) => {
@@ -134,6 +145,18 @@ export default function OrderListScreen({ navigation, route }: any) {
   const onChangeSearch = (text: string) => {
     setSearch(text);
     debouncedSearch(text);
+  };
+
+  const onChangeDate = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+
+    if (selectedDate) {
+      const iso = selectedDate.toISOString().split("T")[0];
+
+      setDateFilter(iso);
+
+      fetchOrders(1, false, search, filter, iso);
+    }
   };
 
   const onRefresh = async () => {
@@ -167,6 +190,9 @@ export default function OrderListScreen({ navigation, route }: any) {
 
   const renderItem = ({ item, drag, isActive }: any) => {
     const highlight = getHighlightStyle(item.shipperHighlightColor);
+    const deliveryStatus = getDeliveryStatus(item.date, item.time, item.status);
+    const deliveryStyle = getDeliveryStyle(item.date, item.time, item.status);
+
     return (
       <TouchableOpacity
         style={[
@@ -209,11 +235,28 @@ export default function OrderListScreen({ navigation, route }: any) {
           {item.company}
         </Text>
 
-        <View style={styles.deliveryBox}>
-          <Ionicons name="time-outline" size={16} color="#92400e" />
+        <View
+          style={[
+            styles.deliveryBox,
+            {
+              backgroundColor: deliveryStyle.bg,
+              borderColor: deliveryStyle.bg,
+            },
+          ]}
+        >
+          <Ionicons name="time-outline" size={16} color={deliveryStyle.icon} />
 
-          <Text style={styles.deliveryText}>
-            {item.time || "Chưa có giờ"} • {item.date || "Chưa có ngày"}
+          <Text style={[styles.deliveryText, { color: deliveryStyle.text }]}>
+            {item.time || "Chưa có giờ"} •
+            {item.date === new Date().toISOString().split("T")[0]
+              ? "Hôm nay"
+              : formatDate(item.date)}
+            {deliveryStatus && (
+              <Text style={{ color: deliveryStyle.text }}>
+                {" "}
+                • {deliveryStatus}
+              </Text>
+            )}
           </Text>
         </View>
 
@@ -246,27 +289,56 @@ export default function OrderListScreen({ navigation, route }: any) {
   return (
     <SafeAreaView style={styles.container} edges={["left", "right", "bottom"]}>
       {/* SEARCH */}
-      <View style={styles.searchBox}>
-        <Ionicons name="search" size={18} color="#6b7280" />
+      <View style={styles.searchRow}>
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={18} color="#6b7280" />
 
-        <TextInput
-          placeholder="Tìm mã đơn, khách hàng..."
-          style={styles.searchInput}
-          value={search}
-          onChangeText={onChangeSearch}
-        />
+          <TextInput
+            placeholder="Tìm mã đơn, khách hàng..."
+            style={styles.searchInput}
+            value={search}
+            onChangeText={onChangeSearch}
+          />
+        </View>
 
-        {search.length > 0 && (
+        <TouchableOpacity
+          style={styles.dateButton}
+          onPress={() => setShowDatePicker(true)}
+        >
+          <Ionicons name="calendar-outline" size={20} color="#2563eb" />
+        </TouchableOpacity>
+
+        {dateFilter && (
           <TouchableOpacity
+            style={styles.clearDate}
             onPress={() => {
-              setSearch("");
-              fetchOrders(1, false, "");
+              setDateFilter(null);
+              fetchOrders(1, false, search, filter, null);
             }}
           >
-            <Ionicons name="close-circle" size={18} color="#9ca3af" />
+            <Ionicons name="close-circle" size={20} color="#ef4444" />
           </TouchableOpacity>
         )}
       </View>
+
+      {showDatePicker && (
+        <DateTimePicker
+          value={dateFilter ? new Date(dateFilter) : new Date()}
+          mode="date"
+          display="default"
+          onChange={onChangeDate}
+        />
+      )}
+
+      {(search || dateFilter) && (
+        <View style={styles.searchStatus}>
+          <Text style={styles.searchStatusText}>
+            Tìm kiếm:
+            {search ? ` "${search}"` : ""}
+            {dateFilter ? ` • ${formatDate(dateFilter)}` : ""}
+          </Text>
+        </View>
+      )}
 
       {/* FILTER */}
       <View style={styles.tabs}>
@@ -316,6 +388,31 @@ export default function OrderListScreen({ navigation, route }: any) {
               colors={["#2563eb"]}
             />
           }
+          ListEmptyComponent={() => {
+            if (loading) return null;
+
+            if (search || dateFilter) {
+              return (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="search-outline" size={40} color="#9ca3af" />
+                  <Text style={styles.emptyTitle}>Không tìm thấy kết quả</Text>
+                  <Text style={styles.emptyText}>
+                    Thử thay đổi từ khóa hoặc bộ lọc
+                  </Text>
+                </View>
+              );
+            }
+
+            return (
+              <View style={styles.emptyBox}>
+                <Ionicons name="document-outline" size={40} color="#9ca3af" />
+                <Text style={styles.emptyTitle}>Chưa có yêu cầu nào</Text>
+                <Text style={styles.emptyText}>
+                  Các yêu cầu mới sẽ hiển thị tại đây
+                </Text>
+              </View>
+            );
+          }}
           ListFooterComponent={() => {
             if (loadingMore) {
               return (
@@ -349,16 +446,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f3f4f6",
-  },
-
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "white",
-    padding: 10,
-    margin: 12,
-    borderRadius: 8,
-    gap: 8,
+    marginTop: 15,
   },
 
   searchInput: {
@@ -499,22 +587,22 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
   },
+
   deliveryBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fef3c7",
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
     alignSelf: "flex-start",
     marginBottom: 6,
     gap: 6,
+    borderWidth: 1,
   },
 
   deliveryText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#92400e",
   },
 
   footer: {
@@ -552,5 +640,70 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 10,
     fontWeight: "700",
+  },
+
+  remaining: {
+    color: "#dc2626",
+    fontWeight: "600",
+  },
+
+  searchStatus: {
+    paddingHorizontal: 14,
+    marginBottom: 6,
+  },
+
+  searchStatusText: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontStyle: "italic",
+  },
+
+  searchRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 15,
+  },
+
+  searchBox: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+  },
+
+  dateButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    backgroundColor: "#eff6ff",
+  },
+
+  clearDate: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 80,
+    gap: 6,
+  },
+
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+  },
+
+  emptyText: {
+    fontSize: 13,
+    color: "#9ca3af",
   },
 });

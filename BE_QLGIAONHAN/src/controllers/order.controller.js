@@ -48,6 +48,7 @@ exports.getAllOrders = async (req, res) => {
     const search = req.query.search || "";
     const dept = req.query.dept || "";
     const filter = req.query.filter || "ALL";
+    const date = req.query.date || "";
 
     const user = req.user || {};
     const userId = user.id || null;
@@ -87,12 +88,19 @@ exports.getAllOrders = async (req, res) => {
           o.order_code LIKE ? OR
           o.company LIKE ? OR
           o.address LIKE ? OR
+          o.contact LIKE ? OR
+          o.phone LIKE ? OR
           o.sender_name LIKE ?
         )
       `);
 
       const s = `%${search}%`;
-      params.push(s, s, s, s);
+      params.push(s, s, s, s, s, s);
+    }
+
+    if (date) {
+      where.push(`DATE(o.date) = ?`);
+      params.push(date);
     }
 
     if (dept) {
@@ -432,7 +440,7 @@ exports.createOrder = async (req, res) => {
             orderId,
             item.name ?? null,
             item.qty ?? 1,
-            item.checked ? 1 : 0,
+            0,
             body.department_id ?? null,
             body.external_department_id ?? null,
             item.external_profile_id ?? null,
@@ -885,8 +893,79 @@ exports.deleteOrder = async (req, res) => {
   }
 };
 
+// exports.assignReceiver = async (req, res) => {
+//   const { order_code, receiver_id, receiver_email, receiver_name } = req.body;
+//   const orderId = req.params.id;
+//   const user = req.user;
+//   const now = Date.now();
+
+//   try {
+//     await pool.query(
+//       `UPDATE nhigia_logistics_orders
+//        SET sort_index = sort_index + 1
+//        WHERE shipper_id = ?`,
+//       [receiver_id],
+//     );
+
+//     await pool.query(
+//       `UPDATE nhigia_logistics_orders
+//        SET shipper_id = ?,
+//            receiver = ?,
+//            receiver_name = ?,
+//            sort_index = 0,
+//            status = ?,
+//            status_update_date = ?,
+//            updated_at = NOW(),
+//            assigned_at = NOW()
+//        WHERE id = ?`,
+//       [receiver_id, receiver_email, receiver_name, "ASSIGNED", now, orderId],
+//     );
+
+//     await pool.query(
+//       `
+//       INSERT INTO nhigia_logistics_logs
+//       (timestamp, user_email, user_name, user_id, action, order_id, details)
+//       VALUES (?, ?, ?, ?, ?, ?, ?)
+//       `,
+//       [
+//         now,
+//         user.email,
+//         user.name,
+//         user.id,
+//         "ASSIGNED",
+//         orderId,
+//         `Đơn hàng được giao cho ${receiver_name}`,
+//       ],
+//     );
+
+//     await pool.query(
+//       `INSERT INTO nhigia_logistics_notifications
+//        (timestamp, message, read_status, target_role, target_email, order_id)
+//        VALUES (?, ?, 0, ?, ?, ?)`,
+//       [
+//         now,
+//         `Bạn được giao đơn hàng mới: ${order_code}`,
+//         "NVGN",
+//         receiver_email,
+//         orderId
+//       ],
+//     );
+
+//     res.json({ message: "Assigned successfully" });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
 exports.assignReceiver = async (req, res) => {
-  const { order_code, receiver_id, receiver_email, receiver_name } = req.body;
+  const {
+    order_code,
+    receiver_id,
+    receiver_email,
+    receiver_name,
+    attachments,
+  } = req.body;
+
   const orderId = req.params.id;
   const user = req.user;
   const now = Date.now();
@@ -914,6 +993,22 @@ exports.assignReceiver = async (req, res) => {
     );
 
     await pool.query(
+      `UPDATE nhigia_logistics_attachments
+       SET checked = 0
+       WHERE order_id = ?`,
+      [orderId],
+    );
+
+    if (attachments && attachments.length > 0) {
+      await pool.query(
+        `UPDATE nhigia_logistics_attachments
+         SET checked = 1
+         WHERE id IN (?) AND order_id = ?`,
+        [attachments, orderId],
+      );
+    }
+
+    await pool.query(
       `
       INSERT INTO nhigia_logistics_logs
       (timestamp, user_email, user_name, user_id, action, order_id, details)
@@ -932,13 +1027,14 @@ exports.assignReceiver = async (req, res) => {
 
     await pool.query(
       `INSERT INTO nhigia_logistics_notifications
-       (timestamp, message, read_status, target_role, target_email)
-       VALUES (?, ?, 0, ?, ?)`,
+       (timestamp, message, read_status, target_role, target_email, order_id)
+       VALUES (?, ?, 0, ?, ?, ?)`,
       [
         now,
         `Bạn được giao đơn hàng mới: ${order_code}`,
         "NVGN",
         receiver_email,
+        orderId,
       ],
     );
 
@@ -969,25 +1065,25 @@ exports.shipperAccept = async (req, res) => {
            WHERE id = ?`,
           [item.checked ? 1 : 0, item.id],
         );
+      }
+    }
 
-        await pool.query(
-          `
+    await pool.query(
+      `
       INSERT INTO nhigia_logistics_logs
       (timestamp, user_email, user_name, user_id, action, order_id, details)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-          [
-            now,
-            user.email,
-            user.name,
-            user.id,
-            "SHIPPER_ACCEPTED",
-            req.params.id,
-            "Đồng ý nhận đơn",
-          ],
-        );
-      }
-    }
+      [
+        now,
+        user.email,
+        user.name,
+        user.id,
+        "SHIPPER_ACCEPTED",
+        req.params.id,
+        "Đồng ý nhận đơn",
+      ],
+    );
 
     res.json({ message: "Accepted" });
   } catch (err) {
@@ -1040,6 +1136,7 @@ exports.shipperReject = async (req, res) => {
 
 exports.shipperComplete = async (req, res) => {
   const connection = await pool.getConnection();
+  const user = req.user;
 
   try {
     await connection.beginTransaction();
@@ -1078,7 +1175,7 @@ exports.shipperComplete = async (req, res) => {
       [
         "COMPLETED",
         now,
-        note || null,
+        note?.trim() || "Đã hoàn tất",
         loc?.lat || null,
         loc?.lng || null,
         orderId,
@@ -1224,6 +1321,7 @@ exports.qlRequestSupplement = async (req, res) => {
 
 exports.shipperReturnSupplement = async (req, res) => {
   const now = Date.now();
+  const user = req.user;
 
   await pool.query(
     `UPDATE nhigia_logistics_orders
@@ -1275,7 +1373,7 @@ exports.getOrderDetail = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    const allowedStatuses = ["ASSIGNED", "COMPLETED", "FINISHED"];
+    const allowedStatuses = ["ASSIGNED", "COMPLETED", "FINISHED", "PROCESSING"];
 
     if (
       user.role === "NVGN" &&

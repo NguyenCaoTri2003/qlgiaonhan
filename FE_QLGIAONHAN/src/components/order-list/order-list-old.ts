@@ -19,7 +19,6 @@ import { OrderDetailComponent } from "../order-detail/order-detail.component";
 import { OrderFormComponent } from "../order-form/order-form.component";
 import { DepartmentService } from "../../services/department.service";
 import { LoadingComponent } from "../../app/shared/loading/loading.component";
-import { effect } from "@angular/core";
 
 @Component({
   selector: "app-order-list",
@@ -67,6 +66,7 @@ import { effect } from "@angular/core";
               type="text"
               [ngModel]="searchTerm()"
               (ngModelChange)="searchTerm.set($event)"
+              (keyup.enter)="search()"
               placeholder="Tìm theo mã, khách hàng, địa chỉ, người giao..."
               class="w-full pl-10 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
@@ -99,21 +99,40 @@ import { effect } from "@angular/core";
           </div>
 
           <!-- FILTER -->
-          @if (authService.userRole() !== "NVADMIN") {
-            <select
-              [ngModel]="filterDept()"
-              (ngModelChange)="filterDept.set($event)"
-              class="border rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="">Tất cả Bộ phận</option>
+          <select
+            [ngModel]="filterDept()"
+            (ngModelChange)="filterDept.set($event)"
+            class="border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="">Tất cả Bộ phận</option>
 
-              @for (dept of departmentService.departments(); track dept.id) {
-                <option [value]="dept.id">
-                  {{ dept.name }}
-                </option>
-              }
-            </select>
-          }
+            @for (dept of departmentService.departments(); track dept.id) {
+              <option [value]="dept.id">
+                {{ dept.name }}
+              </option>
+            }
+          </select>
+
+          <!-- BUTTON GROUP -->
+          <div class="flex gap-2">
+            <!-- SEARCH -->
+            <button
+              (click)="search()"
+              class="flex items-center gap-1 bg-blue-600 text-white rounded-lg px-3 py-2 text-sm hover:bg-blue-700"
+            >
+              🔍 Tìm
+            </button>
+
+            <!-- RESET -->
+            @if (isSearched()) {
+              <button
+                (click)="resetFilters()"
+                class="flex items-center gap-1 bg-gray-200 text-gray-700 rounded-lg px-3 py-2 text-sm hover:bg-gray-300"
+              >
+                🔄 Reset
+              </button>
+            }
+          </div>
         </div>
 
         <!-- Advanced Filters (Tabs) -->
@@ -377,17 +396,11 @@ import { effect } from "@angular/core";
                       <div class="font-medium text-gray-900">
                         {{ order.senderName }}
                       </div>
-
-                      <!-- email nhỏ -->
-                      <div class="text-xs text-gray-400">
-                        {{ order?.creator }}
-                      </div>
-
                       @if (order.senderPhone) {
                         <a
                           [href]="'tel:' + order.senderPhone"
                           (click)="$event.stopPropagation()"
-                          class="text-xs text-blue-500 hover:underline flex items-center mt-1"
+                          class="text-xs text-blue-500 hover:underline flex items-center"
                         >
                           📞 {{ order.senderPhone }}
                         </a>
@@ -803,31 +816,14 @@ export class OrderListComponent {
 
   isShipper = computed(() => this.authService.userRole() === "NVGN");
 
-  private timer: any;
-
-  private searchEffect = effect(
-    () => {
-      const search = this.searchTerm();
-      const dept = this.filterDept();
-      const filter = this.currentFilter();
-
-      clearTimeout(this.timer);
-
-      // bật loading ngay
-      this.loading.set(true);
-
-      this.timer = setTimeout(() => {
-        this.currentPage = 1;
-        this.load();
-      }, 400);
-    },
-    { allowSignalWrites: true },
-  );
-
   ngOnInit() {
-    this.departmentService.loadDepartments();
     this.load();
+    this.departmentService.loadDepartments();
   }
+
+  // load() {
+  //   this.orderService.loadOrders(this.currentPage, this.limit);
+  // }
 
   nextPage() {
     if (this.currentPage < this.orderService.totalPages()) {
@@ -841,6 +837,33 @@ export class OrderListComponent {
       this.currentPage--;
       this.load();
     }
+  }
+
+  search() {
+    this.currentPage = 1;
+
+    const hasFilter =
+      this.searchTerm().trim() !== "" || this.filterDept() !== "";
+
+    this.isSearched.set(hasFilter);
+
+    this.loading.set(true);
+
+    this.orderService
+      .loadOrders(
+        this.currentPage,
+        this.limit,
+        this.searchTerm(),
+        this.filterDept(),
+        this.currentFilter(),
+      )
+      .subscribe({
+        next: () => this.loading.set(false),
+        error: (err) => {
+          console.error("Search error:", err);
+          this.loading.set(false);
+        },
+      });
   }
 
   load() {
@@ -858,6 +881,24 @@ export class OrderListComponent {
         next: () => this.loading.set(false),
         error: () => this.loading.set(false),
       });
+  }
+
+  clearSearch() {
+    this.searchTerm.set("");
+
+    const hasFilter = this.filterDept() !== "";
+    this.isSearched.set(hasFilter);
+
+    this.search();
+  }
+
+  resetFilters() {
+    this.searchTerm.set("");
+    this.filterDept.set("");
+
+    this.currentPage = 1;
+    this.isSearched.set(false);
+    this.search();
   }
 
   orders = computed(() => {
@@ -894,6 +935,8 @@ export class OrderListComponent {
 
   setFilter(filter: FilterType) {
     this.currentFilter.set(filter);
+    this.currentPage = 1;
+    this.load();
   }
 
   confirmDelete(event: Event, order: Order) {

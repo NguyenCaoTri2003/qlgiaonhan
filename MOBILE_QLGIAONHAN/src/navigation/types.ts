@@ -4,3 +4,9 @@ export type RootTabParamList = {
   Notifications: undefined;
   Profile: undefined;
 };
+
+export type OrdersStackParamList = {
+  OrderList: undefined;
+  OrderDetail: { id: number };
+  CompleteOrder: { id: number };
+};

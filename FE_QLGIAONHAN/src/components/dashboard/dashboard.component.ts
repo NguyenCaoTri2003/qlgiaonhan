@@ -4,7 +4,7 @@ import { AuthService } from "../../services/auth.service";
 import { OrderService } from "../../services/order.service";
 import { ViewStateService } from "../../services/view-state.service";
 import { OrderFormComponent } from "../order-form/order-form.component";
-import { DepartmentType } from "../../type/models";
+import { Router } from "@angular/router";
 
 @Component({
   selector: "app-dashboard",
@@ -91,9 +91,13 @@ import { DepartmentType } from "../../type/models";
               />
             </svg>
           </div>
-          <span class="text-3xl font-black text-gray-900">{{
-            stats().total
-          }}</span>
+          @if (!loading()) {
+            <span class="text-3xl font-black text-gray-900">
+              {{ stats().total }}
+            </span>
+          } @else {
+            <div class="h-8 w-12 rounded skeleton"></div>
+          }
           <span
             class="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1"
             >Tổng cộng</span
@@ -280,10 +284,19 @@ export class DashboardComponent {
 
   showCreateForm = signal(false);
   editingOrder = signal<any>(null);
+  router = inject(Router);
+  loading = signal(true);
 
   ngOnInit() {
     if (this.orderService.orders().length === 0) {
-      this.orderService.loadOrders().subscribe();
+      this.loading.set(true);
+
+      this.orderService.loadOrders().subscribe({
+        next: () => this.loading.set(false),
+        error: () => this.loading.set(false),
+      });
+    } else {
+      this.loading.set(false);
     }
   }
 
@@ -329,7 +342,7 @@ export class DashboardComponent {
     const colors = ["bg-blue-500", "bg-purple-500", "bg-teal-500"];
 
     return depts.map((code, i) => ({
-      name: deptMap[code], 
+      name: deptMap[code],
       count: orders.filter((o) => o.department?.code === code).length,
       color: colors[i],
     }));
@@ -352,6 +365,6 @@ export class DashboardComponent {
 
   goToOrders(filter: string) {
     this.orderService.orderListFilter.set(filter as any);
-    this.viewState.activeView.set("ORDERS");
+    this.router.navigate(["/orders"]);
   }
 }

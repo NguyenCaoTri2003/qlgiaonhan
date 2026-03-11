@@ -103,7 +103,7 @@ export class OrderService {
         }),
       );
   }
-  
+
   getOrderDetail(id: number) {
     return this.http.get<Order>(`${this.API}/orders/${id}`);
   }
@@ -123,12 +123,30 @@ export class OrderService {
     return this.http.put(`${this.API}/orders/${id}`, updates);
   }
 
+  // assignReceiver(
+  //   id: number,
+  //   order_code: string,
+  //   receiver_id: number,
+  //   receiver_email: string,
+  //   receiver_name: string,
+  // ) {
+  //   return this.http
+  //     .post(`${this.API}/orders/${id}/assign`, {
+  //       order_code,
+  //       receiver_id,
+  //       receiver_email,
+  //       receiver_name,
+  //     })
+  //     .pipe(tap(() => this.refreshOrders()));
+  // }
+
   assignReceiver(
     id: number,
     order_code: string,
     receiver_id: number,
     receiver_email: string,
     receiver_name: string,
+    attachments: number[],
   ) {
     return this.http
       .post(`${this.API}/orders/${id}/assign`, {
@@ -136,6 +154,7 @@ export class OrderService {
         receiver_id,
         receiver_email,
         receiver_name,
+        attachments,
       })
       .pipe(tap(() => this.refreshOrders()));
   }
