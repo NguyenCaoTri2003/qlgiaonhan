@@ -60,21 +60,23 @@ import { effect } from "@angular/core";
     <div class="space-y-4">
       <!-- Search & Filters Toolbar -->
       <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
           <!-- SEARCH -->
           <div class="relative md:col-span-3">
+            <label class="text-xs text-gray-500 mb-1 block">Tìm kiếm</label>
+
             <input
               type="text"
               [ngModel]="searchTerm()"
               (ngModelChange)="searchTerm.set($event)"
-              placeholder="Tìm theo mã, khách hàng, địa chỉ, người giao..."
+              placeholder="Mã đơn, khách hàng, địa chỉ..."
               class="w-full pl-10 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
 
-            <!-- icon search -->
+            <!-- icon -->
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5 absolute left-3 top-2.5 text-gray-400"
+              class="h-5 w-5 absolute left-3 top-[34px] text-gray-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -87,35 +89,60 @@ import { effect } from "@angular/core";
               />
             </svg>
 
-            <!-- clear button -->
             @if (searchTerm()) {
               <button
                 (click)="searchTerm.set('')"
-                class="absolute right-3 top-2.5 text-gray-400 hover:text-red-500"
+                class="absolute right-3 top-[34px] text-gray-400 hover:text-red-500"
               >
                 ✕
               </button>
             }
           </div>
 
-          <!-- FILTER -->
+          <!-- DEPARTMENT -->
           @if (authService.userRole() !== "NVADMIN") {
-            <select
-              [ngModel]="filterDept()"
-              (ngModelChange)="filterDept.set($event)"
-              class="border rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="">Tất cả Bộ phận</option>
+            <div>
+              <label class="text-xs text-gray-500 mb-1 block">Bộ phận</label>
 
-              @for (dept of departmentService.departments(); track dept.id) {
-                <option [value]="dept.id">
-                  {{ dept.name }}
-                </option>
-              }
-            </select>
+              <select
+                [ngModel]="filterDept()"
+                (ngModelChange)="filterDept.set($event)"
+                class="w-full border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">Tất cả</option>
+
+                @for (dept of departmentService.departments(); track dept.id) {
+                  <option [value]="dept.id">
+                    {{ dept.name }}
+                  </option>
+                }
+              </select>
+            </div>
           }
-        </div>
 
+          <!-- DATE FILTER -->
+          <div class="flex items-end gap-2">
+            <div class="flex-1">
+              <label class="text-xs text-gray-500 mb-1 block">Ngày giao</label>
+
+              <input
+                type="date"
+                [ngModel]="dateFilter()"
+                (ngModelChange)="dateFilter.set($event)"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            @if (dateFilter()) {
+              <button
+                (click)="dateFilter.set('')"
+                class="text-xs bg-red-50 text-red-500 px-2 py-1 rounded hover:bg-red-100"
+              >
+                Xóa
+              </button>
+            }
+          </div>
+        </div>
         <!-- Advanced Filters (Tabs) -->
         <div
           class="flex space-x-2 border-b border-gray-200 bg-white px-4 rounded-t-lg shadow-sm overflow-x-auto"
@@ -185,7 +212,7 @@ import { effect } from "@angular/core";
                 <div
                   [class]="
                     'absolute left-0 top-0 bottom-0 w-1 ' +
-                    getDeptColorClass(order.department?.code || '')
+                      getStatusColorClass(order.status)
                   "
                 ></div>
 
@@ -782,6 +809,7 @@ export class OrderListComponent {
   currentFilter = signal<FilterType>("ALL");
   searchTerm = signal("");
   filterDept = signal("");
+  dateFilter = signal<string>("");
   isSearched = signal(false);
 
   totalPages = this.orderService.totalPages;
@@ -810,6 +838,7 @@ export class OrderListComponent {
       const search = this.searchTerm();
       const dept = this.filterDept();
       const filter = this.currentFilter();
+      const date = this.dateFilter();
 
       clearTimeout(this.timer);
 
@@ -853,6 +882,7 @@ export class OrderListComponent {
         this.searchTerm(),
         this.filterDept(),
         this.currentFilter(),
+        this.dateFilter(),
       )
       .subscribe({
         next: () => this.loading.set(false),
@@ -1061,6 +1091,21 @@ export class OrderListComponent {
       default:
         return "bg-gray-400";
     }
+  }
+
+  getStatusColorClass(status: OrderStatus): string {
+    const map: Record<OrderStatus, string> = {
+      PENDING: "bg-red-500",
+      ASSIGNED: "bg-blue-500",
+      PROCESSING: "bg-yellow-500",
+      COMPLETED: "bg-purple-500",
+      FINISHED: "bg-green-500",
+      REJECTED: "bg-gray-500",
+      SUPPLEMENT_REQUIRED: "bg-orange-500",
+      INCOMPLETE: "bg-red-400",
+    };
+
+    return map[status] || "bg-gray-400";
   }
 
   getDeptTextColorClass(dept: string): string {

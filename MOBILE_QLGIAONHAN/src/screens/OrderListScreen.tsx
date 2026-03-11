@@ -31,6 +31,9 @@ import {
   getDeliveryStyle,
 } from "../utils/dateUtils";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { Picker } from "@react-native-picker/picker";
+import { Dropdown } from "react-native-element-dropdown";
+import { departmentService } from "../services/department.service";
 
 export default function OrderListScreen({ navigation, route }: any) {
   const PAGE_SIZE = 10;
@@ -53,6 +56,10 @@ export default function OrderListScreen({ navigation, route }: any) {
   const [dateFilter, setDateFilter] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  const [departments, setDepartments] = useState([]);
+  const [deptFilter, setDeptFilter] = useState("");
+  const [deptFocus, setDeptFocus] = useState(false);
+
   useEffect(() => {
     if (route.params?.openOrderId) {
       navigation.navigate("OrderDetail", {
@@ -61,10 +68,20 @@ export default function OrderListScreen({ navigation, route }: any) {
     }
   }, [route.params?.openOrderId]);
 
+  useEffect(() => {
+    const loadDepartments = async () => {
+      const data = await departmentService.loadDepartments();
+      setDepartments(data);
+    };
+
+    loadDepartments();
+  }, []);
+
   const fetchOrders = async (
     pageNum = 1,
     isLoadMore = false,
     keyword = search,
+    dept = deptFilter,
     filterVal = filter,
     date = dateFilter,
   ) => {
@@ -76,7 +93,7 @@ export default function OrderListScreen({ navigation, route }: any) {
         pageNum,
         PAGE_SIZE,
         keyword,
-        "",
+        dept,
         filterVal,
         date || "",
       );
@@ -107,14 +124,14 @@ export default function OrderListScreen({ navigation, route }: any) {
   );
 
   useEffect(() => {
-    fetchOrders(1, false, search, filter, dateFilter);
-  }, [filter, search, dateFilter]);
+    fetchOrders(1, false, search, deptFilter, filter, dateFilter);
+  }, [filter, search, deptFilter, dateFilter]);
 
   const debouncedSearch = useCallback(
     debounce((text) => {
-      fetchOrders(1, false, text, filter, dateFilter);
+      fetchOrders(1, false, text, deptFilter, filter, dateFilter);
     }, 500),
-    [filter, dateFilter],
+    [filter, dateFilter, deptFilter],
   );
 
   const getHighlightStyle = (color?: string) => {
@@ -155,7 +172,7 @@ export default function OrderListScreen({ navigation, route }: any) {
 
       setDateFilter(iso);
 
-      fetchOrders(1, false, search, filter, iso);
+      fetchOrders(1, false, search, deptFilter, filter, iso);
     }
   };
 
@@ -187,6 +204,14 @@ export default function OrderListScreen({ navigation, route }: any) {
   const openDetail = (order: any) => {
     navigation.navigate("OrderDetail", { id: order.id });
   };
+
+  const deptOptions = [
+    { label: "Tất cả bộ phận", value: "" },
+    ...departments.map((d: any) => ({
+      label: d.name,
+      value: d.id,
+    })),
+  ];
 
   const renderItem = ({ item, drag, isActive }: any) => {
     const highlight = getHighlightStyle(item.shipperHighlightColor);
@@ -249,7 +274,7 @@ export default function OrderListScreen({ navigation, route }: any) {
           <Text style={[styles.deliveryText, { color: deliveryStyle.text }]}>
             {item.time || "Chưa có giờ"} •
             {item.date === new Date().toISOString().split("T")[0]
-              ? "Hôm nay"
+              ? " Hôm nay"
               : formatDate(item.date)}
             {deliveryStatus && (
               <Text style={{ color: deliveryStyle.text }}>
@@ -313,12 +338,51 @@ export default function OrderListScreen({ navigation, route }: any) {
             style={styles.clearDate}
             onPress={() => {
               setDateFilter(null);
-              fetchOrders(1, false, search, filter, null);
+              fetchOrders(1, false, search, deptFilter, filter, null);
             }}
           >
             <Ionicons name="close-circle" size={20} color="#ef4444" />
           </TouchableOpacity>
         )}
+      </View>
+
+      <View style={[styles.deptFilter, deptFocus && styles.deptFilterActive]}>
+        <Ionicons name="business-outline" size={16} color="#6b7280" />
+
+        <Dropdown
+          style={styles.dropdown}
+          containerStyle={styles.dropdownContainer}
+          placeholderStyle={styles.dropdownPlaceholder}
+          selectedTextStyle={styles.dropdownText}
+          itemTextStyle={styles.dropdownItemText}
+          data={deptOptions}
+          labelField="label"
+          valueField="value"
+          placeholder="Tất cả bộ phận"
+          value={deptFilter}
+          onChange={(item) => {
+            setDeptFilter(item.value);
+          }}
+        />
+        {/* <Picker
+          selectedValue={deptFilter}
+          onValueChange={(value) => {
+            setDeptFocus(true);
+            setDeptFilter(value);
+
+            setTimeout(() => {
+              setDeptFocus(false);
+            }, 200);
+          }}
+          dropdownIconColor="#2563eb"
+          style={styles.deptPicker}
+        >
+          <Picker.Item label="Tất cả bộ phận" value="" />
+
+          {departments.map((d: any) => (
+            <Picker.Item key={d.id} label={d.name} value={d.id} />
+          ))}
+        </Picker> */}
       </View>
 
       {showDatePicker && (
@@ -705,5 +769,57 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 13,
     color: "#9ca3af",
+  },
+
+  deptFilter: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    height: 42,
+  },
+
+  deptPicker: {
+    flex: 1,
+    marginLeft: 6,
+    fontSize: 13,
+    color: "#374151",
+  },
+
+  deptFilterActive: {
+    borderColor: "#2563eb",
+    shadowColor: "#2563eb",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+
+  dropdown: {
+    flex: 1,
+    marginLeft: 8,
+  },
+
+  dropdownContainer: {
+    borderRadius: 10,
+  },
+
+  dropdownPlaceholder: {
+    fontSize: 13,
+    color: "#9ca3af",
+  },
+
+  dropdownText: {
+    fontSize: 13,
+    color: "#374151",
+    fontWeight: "500",
+  },
+
+  dropdownItemText: {
+    fontSize: 14,
   },
 });

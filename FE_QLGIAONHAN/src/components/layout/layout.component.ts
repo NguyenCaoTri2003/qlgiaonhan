@@ -72,8 +72,10 @@ import { Router } from "@angular/router";
                 </svg>
                 @if (unreadCount() > 0) {
                   <span
-                    class="absolute top-0 right-0 block h-2 w-2 rounded-full ring-2 ring-blue-700 bg-red-500 animate-pulse"
-                  ></span>
+                    class="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full"
+                  >
+                    {{ unreadCount() }}
+                  </span>
                 }
               </button>
 
@@ -93,16 +95,26 @@ import { Router } from "@angular/router";
                       Đọc tất cả
                     </button>
                   </div>
-                  <div class="max-h-60 overflow-y-auto">
+                  <div
+                    class="max-h-72 overflow-y-auto"
+                    (scroll)="loadMoreNotifications($event)"
+                  >
                     @for (notif of notifications(); track notif.id) {
                       <div
-                        class="px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                        [class.bg-blue-50]="!notif.read"
+                        (click)="openNotification(notif)"
+                        class="px-4 py-3 hover:bg-gray-50 border-b border-gray-100 cursor-pointer"
+                        [class.bg-blue-50]="notif.read_status === 0"
                       >
                         <p class="text-sm text-gray-800">{{ notif.message }}</p>
+
                         <p class="text-xs text-gray-400 mt-1">
                           {{ notif.timestamp | date: "HH:mm dd/MM" }}
                         </p>
+                      </div>
+                    }
+                    @if (notificationService.loading()) {
+                      <div class="py-3 text-center text-gray-400 text-xs">
+                        Đang tải thêm...
                       </div>
                     }
                     @if (notifications().length === 0) {
@@ -387,12 +399,34 @@ export class LayoutComponent {
   isSidebarOpen = signal(false);
 
   getInitial(name?: string): string {
-    if (!name) return "?";
+    if (!name) return "A";
     return name.trim().charAt(0).toUpperCase();
   }
 
   ngOnInit() {
-    this.notificationService.loadNotifications();
+    this.notificationService.loadNotifications(true);
+  }
+
+  loadMoreNotifications(event: any) {
+    const el = event.target;
+
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) {
+      this.notificationService.loadMore();
+    }
+  }
+
+  openNotification(notif: any) {
+    if (notif.read_status === 0) {
+      this.notificationService.markAsRead(notif.id);
+    }
+
+    if (notif.orderId) {
+      this.router.navigate(["/orders"], {
+        queryParams: { orderId: notif.orderId },
+      });
+    }
+
+    this.showNotif.set(false);
   }
 
   getAvatarColor(name?: string) {
