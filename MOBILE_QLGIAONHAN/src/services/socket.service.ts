@@ -1,4 +1,5 @@
 import { io, Socket } from "socket.io-client";
+import { BE_URL } from "../constants/api";
 
 let socket: Socket | null = null;
 
@@ -10,7 +11,7 @@ export const connectSocket = (
     orderAssigned?: (data: any) => void;
   }
 ) => {
-  socket = io("http://192.168.1.39:5000", {
+  socket = io(BE_URL, {
     transports: ["websocket"],
   });
 
