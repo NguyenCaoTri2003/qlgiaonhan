@@ -35,7 +35,7 @@ exports.getDepartment = async (req, res) => {
 
     let departments;
 
-    if (role === "QL") {
+    if (role === "QL" || role === "NVGN") {
       departments = result.results;
     } else {
       departments = result.results.filter(

@@ -1,10 +1,21 @@
-import { Component, inject, output, signal } from "@angular/core";
+import {
+  Component,
+  inject,
+  output,
+  signal,
+  ElementRef,
+  HostListener,
+  ViewChild,
+  effect,
+} from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { AuthService } from "../../services/auth.service";
 import { NotificationService } from "../../services/notification.service";
 import { ViewStateService } from "../../services/view-state.service";
 import { RouterOutlet } from "@angular/router";
 import { Router } from "@angular/router";
+import { SocketService } from "../../services/socket.service";
+import { ToastService } from "../../services/toast.service";
 
 @Component({
   selector: "app-layout",
@@ -51,9 +62,9 @@ import { Router } from "@angular/router";
           <!-- User & Notifications -->
           <div class="flex items-center space-x-4">
             <!-- Notification Bell -->
-            <div class="relative">
+            <div class="relative" #notifContainer>
               <button
-                (click)="toggleNotif()"
+                (click)="toggleNotif(); $event.stopPropagation()"
                 class="p-1 rounded-full text-blue-200 hover:text-white focus:outline-none relative transition-colors"
               >
                 <svg
@@ -72,8 +83,10 @@ import { Router } from "@angular/router";
                 </svg>
                 @if (unreadCount() > 0) {
                   <span
-                    class="absolute top-0 right-0 block h-2 w-2 rounded-full ring-2 ring-blue-700 bg-red-500 animate-pulse"
-                  ></span>
+                    class="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full"
+                  >
+                    {{ unreadCount() }}
+                  </span>
                 }
               </button>
 
@@ -93,16 +106,26 @@ import { Router } from "@angular/router";
                       Đọc tất cả
                     </button>
                   </div>
-                  <div class="max-h-60 overflow-y-auto">
+                  <div
+                    class="max-h-72 overflow-y-auto"
+                    (scroll)="loadMoreNotifications($event)"
+                  >
                     @for (notif of notifications(); track notif.id) {
                       <div
-                        class="px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                        [class.bg-blue-50]="!notif.read"
+                        (click)="openNotification(notif)"
+                        class="px-4 py-3 hover:bg-gray-50 border-b border-gray-100 cursor-pointer"
+                        [class.bg-blue-50]="notif.read_status === 0"
                       >
                         <p class="text-sm text-gray-800">{{ notif.message }}</p>
+
                         <p class="text-xs text-gray-400 mt-1">
                           {{ notif.timestamp | date: "HH:mm dd/MM" }}
                         </p>
+                      </div>
+                    }
+                    @if (notificationService.loading()) {
+                      <div class="py-3 text-center text-gray-400 text-xs">
+                        Đang tải thêm...
                       </div>
                     }
                     @if (notifications().length === 0) {
@@ -367,10 +390,33 @@ import { Router } from "@angular/router";
           <router-outlet></router-outlet>
         </main>
       </div>
+
+      <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
+        @for (toast of toastService.toasts(); track toast.id) {
+          <div
+            (click)="openToast(toast)"
+            class="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-xl flex items-start gap-3 cursor-pointer hover:bg-blue-700 min-w-[300px]"
+          >
+            <span class="text-lg">🔔</span>
+
+            <div class="flex-1 text-sm">
+              {{ toast.message }}
+            </div>
+
+            <button
+              (click)="$event.stopPropagation(); toastService.remove(toast.id)"
+              class="text-white/80 hover:text-white text-lg"
+            >
+              ✕
+            </button>
+          </div>
+        }
+      </div>
     </div>
   `,
 })
 export class LayoutComponent {
+  @ViewChild("notifContainer") notifContainer!: ElementRef;
   logout = output<void>();
   navigate = output<string>();
   router = inject(Router);
@@ -386,13 +432,72 @@ export class LayoutComponent {
   showNotif = signal(false);
   isSidebarOpen = signal(false);
 
+  socketService = inject(SocketService);
+  toastService = inject(ToastService);
+
+  elementRef = inject(ElementRef);
+
+  @HostListener("document:click", ["$event"])
+  onClickOutside(event: MouseEvent) {
+    if (!this.showNotif()) return;
+
+    const clickedInside = this.notifContainer?.nativeElement.contains(
+      event.target,
+    );
+
+    if (!clickedInside) {
+      this.showNotif.set(false);
+    }
+  }
+
   getInitial(name?: string): string {
-    if (!name) return "?";
+    if (!name) return "A";
     return name.trim().charAt(0).toUpperCase();
   }
 
+  openToast(toast: any) {
+    this.toastService.remove(toast.id);
+    this.openNotification(toast);
+  }
+
+  socketEffect = effect(() => {
+    const user = this.user();
+
+    if (!user) return;
+
+    this.socketService.join(user.id, user.role);
+
+    this.socketService.onNotification((data) => {
+      this.notificationService.loadNotifications(true);
+
+      this.toastService.show(data);
+    });
+  });
+
   ngOnInit() {
-    this.notificationService.loadNotifications();
+    this.notificationService.loadNotifications(true);
+  }
+
+  loadMoreNotifications(event: any) {
+    const el = event.target;
+
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) {
+      this.notificationService.loadMore();
+    }
+  }
+
+  openNotification(notif: any) {
+    if (notif.read_status === 0) {
+      this.notificationService.markAsRead(notif.id);
+    }
+
+    if (notif.orderId) {
+      this.router.navigate(["/orders"], {
+        queryParams: { orderId: notif.orderId },
+      });
+    }
+
+    this.showNotif.set(false);
   }
 
   getAvatarColor(name?: string) {

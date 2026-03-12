@@ -126,7 +126,7 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     const { data: result } = await axios.post(
-      "https://demoapi.nhigia.vn/quanli/apigiaonhan/apigiaonhan.php",
+      "http://demoapi.nhigia.vn/quanli/apigiaonhan/apigiaonhan.php",
       {
         action: "login",
         email,

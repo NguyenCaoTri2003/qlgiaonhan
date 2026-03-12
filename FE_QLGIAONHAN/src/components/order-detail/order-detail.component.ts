@@ -219,9 +219,17 @@ import { ToastComponent } from "../../app/shared/toast/toast.component";
             >
               <div>
                 <p class="text-xs text-gray-500 uppercase">
-                  Người Giao (Sender)
+                  Người Giao
                 </p>
-                <p class="font-bold text-gray-900">{{ order().senderName }}</p>
+
+                <p class="font-bold text-gray-900">
+                  {{ order().senderName }}
+                </p>
+
+                <!-- email -->
+                <p class="text-xs text-gray-400">
+                  {{ order().creator }}
+                </p>
               </div>
               @if (order().senderPhone) {
                 <a
@@ -666,7 +674,7 @@ import { ToastComponent } from "../../app/shared/toast/toast.component";
                   <!-- Select -->
                   <div class="flex-1">
                     <select
-                      #shipperSelect
+                      [(ngModel)]="selectedShipper"
                       class="w-full h-11 px-4 border border-gray-300 rounded-lg 
                         bg-white text-sm shadow-sm
                         focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
@@ -680,10 +688,11 @@ import { ToastComponent } from "../../app/shared/toast/toast.component";
                   </div>
 
                   <button
-                    (click)="assign(shipperSelect.value)"
+                    (click)="assign(selectedShipper)"
+                    [disabled]="!selectedShipper"
                     class="h-11 px-6 rounded-lg 
-                      bg-blue-600 text-white text-sm font-semibold 
-                      shadow-sm hover:bg-blue-700 
+                      bg-blue-600 text-white text-sm font-semibold
+                      disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed
                       transition duration-200"
                   >
                     Điều phối
@@ -1135,6 +1144,8 @@ export class OrderDetailComponent implements OnInit {
   hasSignature = signal(false);
 
   currentUserRole = this.authService.userRole;
+  selectedShipper = "";
+  forbidden = signal(false);
 
   ngOnInit() {
     if (this.order()?.attachments) {
@@ -1154,12 +1165,21 @@ export class OrderDetailComponent implements OnInit {
 
   isChecklistActive() {
     const status = this.order().status;
-    return (
-      (status === "ASSIGNED" ||
+    const role = this.currentUserRole();
+
+    if (role === "NVGN") {
+      return (
+        status === "ASSIGNED" ||
         status === "PENDING" ||
-        status === "SUPPLEMENT_REQUIRED") &&
-      this.currentUserRole() === "NVGN"
-    );
+        status === "SUPPLEMENT_REQUIRED"
+      );
+    }
+
+    if (role === "QL") {
+      return status === "PENDING" || status === "SUPPLEMENT_REQUIRED";
+    }
+
+    return false;
   }
 
   toggleItem(index: number) {
@@ -1267,9 +1287,18 @@ export class OrderDetailComponent implements OnInit {
     const missingStr = this.getMissingItemsString();
 
     this.commitChecklist();
-    this.close.emit();
 
-    this.orderService.shipperAccept(this.order().id, checklist, missingStr);
+    this.orderService
+      .shipperAccept(this.order().id, checklist, missingStr)
+      .subscribe({
+        next: () => {
+          this.toast.show("Nhận yêu cầu giao nhận thành công", "success");
+          this.close.emit();
+        },
+        error: () => {
+          this.toast.show("Nhận yêu cầu giao nhận thất bại", "error");
+        },
+      });
 
     this.showMissingAlert.set(false);
   }
@@ -1374,6 +1403,10 @@ export class OrderDetailComponent implements OnInit {
     const shipper = this.shippers.find((s) => s.email === email);
 
     if (shipper) {
+      const checkedAttachments = this.localAttachments()
+        .filter((a) => a.checked)
+        .map((a) => a.id);
+
       this.orderService
         .assignReceiver(
           this.order().id,
@@ -1381,6 +1414,7 @@ export class OrderDetailComponent implements OnInit {
           shipper.id,
           shipper.email,
           shipper.name,
+          checkedAttachments,
         )
         .subscribe({
           next: () => {
@@ -1627,7 +1661,7 @@ export class OrderDetailComponent implements OnInit {
           this.selectedFiles(),
           location,
           signatureFile,
-          this.actionNote || "Đã hoàn tất",
+          this.actionNote,
         )
         .subscribe({
           next: () => {

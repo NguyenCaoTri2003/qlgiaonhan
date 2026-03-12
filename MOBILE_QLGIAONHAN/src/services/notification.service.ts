@@ -2,7 +2,7 @@ import axiosClient from "../api/axiosClient";
 
 export const notificationService = {
   async getNotifications(page = 1, limit = 10) {
-    const res = await axiosClient.get("/notifications/load", {
+    const res = await axiosClient.get("/notifications", {
       params: { page, limit },
     });
 

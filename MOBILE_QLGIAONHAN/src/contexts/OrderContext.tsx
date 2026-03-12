@@ -5,15 +5,10 @@ const OrderContext = createContext<any>(null);
 
 export function OrderProvider({ children }: any) {
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
-  
+
   const loadCounts = async () => {
-    try {
-      const res = await orderService.getOrderCounts();
-      console.log("Res: ", res.data)
-      setPendingOrdersCount(res.PENDING_GROUP || 0);
-    } catch (err) {
-      console.log("Load order counts error:", err);
-    }
+    const res = await orderService.getOrderCounts();
+    setPendingOrdersCount(res.PENDING_GROUP || 0);
   };
 
   useEffect(() => {
@@ -25,6 +20,7 @@ export function OrderProvider({ children }: any) {
       value={{
         pendingOrdersCount,
         reloadOrderCounts: loadCounts,
+        setPendingOrdersCount,
       }}
     >
       {children}

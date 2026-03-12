@@ -509,19 +509,35 @@ import { AuthService } from "../../services/auth.service";
           <!-- New Attachments UI -->
           <div class="bg-white border rounded-lg overflow-hidden">
             <div
-              class="bg-gray-100 px-4 py-2 border-b flex justify-between items-center"
+              class="bg-gray-100 px-4 py-2 border-b flex items-center justify-between"
             >
-              <label class="text-sm font-bold text-gray-700 uppercase"
-                >Hồ sơ đính kèm</label
+              <!-- Title -->
+              <label
+                class="text-sm font-bold text-gray-700 uppercase tracking-wide"
               >
-              <button
-                type="button"
-                (click)="addNewAttachment()"
-                class="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-sm hover:bg-blue-700 font-bold"
-              >
-                +
-              </button>
+                Hồ sơ đính kèm
+              </label>
+
+              <!-- Actions -->
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  (click)="openAvailableModal()"
+                  class="text-xs px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md transition font-medium"
+                >
+                  Thêm có sẵn
+                </button>
+
+                <button
+                  type="button"
+                  (click)="addNewAttachment()"
+                  class="w-7 h-7 flex items-center justify-center rounded-full bg-blue-600 text-white font-bold shadow hover:bg-blue-700 transition"
+                >
+                  +
+                </button>
+              </div>
             </div>
+
             <!-- Uploaded Files Section -->
             @if (
               orderData()?.uploadedFiles &&
@@ -605,6 +621,7 @@ import { AuthService } from "../../services/auth.service";
                 <input
                   type="checkbox"
                   [checked]="att.checked"
+                  disabled
                   (change)="toggleCustomAtt(i)"
                   class="w-4 h-4 text-blue-600 rounded"
                 />
@@ -738,13 +755,168 @@ import { AuthService } from "../../services/auth.service";
             </button>
             <button
               type="submit"
-              [disabled]="form.invalid"
-              class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-black text-white bg-blue-600 hover:bg-blue-700 focus:outline-none disabled:opacity-50 uppercase tracking-tight"
+              [disabled]="form.invalid || isSubmitting()"
+              class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-black text-white bg-blue-600 hover:bg-blue-700 focus:outline-none disabled:opacity-50 uppercase tracking-tight flex items-center gap-2"
             >
-              {{ isEditMode() ? "Cập Nhật" : "Tạo Yêu Cầu" }}
+              @if (isSubmitting()) {
+                <span
+                  class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
+                ></span>
+              }
+
+              {{
+                isSubmitting()
+                  ? "Đang xử lý..."
+                  : isEditMode()
+                    ? "Cập Nhật"
+                    : "Tạo Yêu Cầu"
+              }}
             </button>
           </div>
         </form>
+
+        @if (showAvailableModal()) {
+          <div
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in"
+          >
+            <div
+              class="bg-white w-[520px] max-h-[80vh] rounded-xl shadow-2xl flex flex-col overflow-hidden"
+            >
+              <!-- Header -->
+              <div
+                class="px-5 py-3 border-b flex items-center justify-between bg-gray-50"
+              >
+                <h3
+                  class="font-bold text-sm uppercase tracking-wide text-gray-700"
+                >
+                  Chọn hồ sơ có sẵn
+                </h3>
+
+                <button
+                  (click)="closeAvailableModal()"
+                  class="text-gray-400 hover:text-red-500 text-lg"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <!-- Search -->
+              <div class="p-4 border-b bg-white space-y-3">
+                <!-- Search -->
+                <div class="relative">
+                  <span
+                    class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"
+                  >
+                    🔎
+                  </span>
+
+                  <input
+                    type="text"
+                    placeholder="Tìm hồ sơ..."
+                    class="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2.5 text-sm
+             focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+             outline-none transition"
+                    (input)="searchAvailable.set($any($event.target).value)"
+                  />
+                </div>
+
+                <!-- Actions -->
+                <div class="flex justify-between items-center text-xs">
+                  <button
+                    (click)="toggleSelectAll()"
+                    class="px-3 py-1 rounded-full border border-blue-200
+                    text-blue-600 bg-blue-50
+                    hover:bg-blue-100 hover:border-blue-300
+                    transition font-medium"
+                  >
+                    {{ allSelected() ? "Bỏ chọn tất cả" : "Chọn tất cả" }}
+                  </button>
+
+                  <span
+                    class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium"
+                  >
+                    {{ selectedAvailableCount() }} đã chọn
+                  </span>
+                </div>
+              </div>
+
+              <!-- List -->
+              <div class="flex-1 overflow-y-auto p-4 space-y-2">
+                @for (
+                  att of filteredAvailable();
+                  track $index;
+                  let i = $index
+                ) {
+                  <div
+                    class="flex items-center gap-3 p-2 rounded-lg border hover:border-blue-400 hover:bg-blue-50 transition group"
+                  >
+                    <!-- checkbox -->
+                    <input
+                      type="checkbox"
+                      [(ngModel)]="att.checked"
+                      [ngModelOptions]="{ standalone: true }"
+                      class="w-4 h-4 text-blue-600"
+                    />
+
+                    <!-- name -->
+                    <span class="flex-1 text-sm font-medium text-gray-700">
+                      {{ att.name }}
+                    </span>
+
+                    <!-- qty -->
+                    <div
+                      class="flex items-center border rounded-md overflow-hidden shadow-sm"
+                    >
+                      <button
+                        type="button"
+                        (click)="updateAvailableQty(i, -1)"
+                        class="px-2 py-1 text-gray-600 hover:bg-gray-200"
+                      >
+                        -
+                      </button>
+
+                      <span class="px-3 text-xs font-bold font-mono">
+                        {{ att.qty }}
+                      </span>
+
+                      <button
+                        type="button"
+                        (click)="updateAvailableQty(i, 1)"
+                        class="px-2 py-1 text-gray-600 hover:bg-gray-200"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                }
+
+                @if (filteredAvailable().length === 0) {
+                  <div class="text-center text-gray-400 text-sm py-6">
+                    Không tìm thấy hồ sơ phù hợp
+                  </div>
+                }
+              </div>
+
+              <!-- Footer -->
+              <div class="border-t px-4 py-3 flex justify-end gap-2 bg-gray-50">
+                <button
+                  (click)="closeAvailableModal()"
+                  class="px-3 py-1 text-sm border rounded hover:bg-gray-100"
+                >
+                  Huỷ
+                </button>
+
+                <button
+                  class="px-4 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                  (click)="confirmAddAvailable()"
+                >
+                  Thêm đã chọn
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+
         <app-toast></app-toast>
       }
     </div>
@@ -837,6 +1009,8 @@ export class OrderFormComponent implements OnInit {
   senderPageSize = 10;
   isLoadingSenders = signal(false);
 
+  isSubmitting = signal(false);
+
   private el = inject(ElementRef);
 
   private clickListener!: (event: MouseEvent) => void;
@@ -844,6 +1018,11 @@ export class OrderFormComponent implements OnInit {
   customAttachments = signal<{ name: string; qty: number; checked: boolean }[]>(
     [],
   );
+
+  availableAttachments = signal<
+    { name: string; qty: number; checked: boolean }[]
+  >([]);
+  searchAvailable = signal("");
 
   isRequired(controlName: string) {
     const control = this.form.get(controlName);
@@ -965,7 +1144,9 @@ export class OrderFormComponent implements OnInit {
               external_profile_id: item.id ?? null,
             }));
 
-            this.customAttachments.set(mapped);
+            // this.customAttachments.set(mapped);
+            this.customAttachments.set(mapped.slice(0, 5));
+            this.availableAttachments.set(mapped.slice(5));
           });
       }
     });
@@ -1027,7 +1208,8 @@ export class OrderFormComponent implements OnInit {
               checked: false,
             }));
 
-          this.customAttachments.set(mapped);
+          this.customAttachments.set(mapped.slice(0, 5));
+          this.availableAttachments.set(mapped.slice(5));
         });
     });
 
@@ -1054,18 +1236,6 @@ export class OrderFormComponent implements OnInit {
   ngOnDestroy() {
     document.removeEventListener("click", this.clickListener, true);
   }
-
-  // onSenderSearch(event: any) {
-  //   const keyword = event.target.value.toLowerCase();
-
-  //   this.senderKeyword.set(keyword);
-
-  //   const filtered = this.allSenders().filter((u) =>
-  //     u.name.toLowerCase().includes(keyword),
-  //   );
-
-  //   this.senders.set(filtered.slice(0, 20));
-  // }
 
   senderValidator = (): ValidationErrors | null => {
     if (!this.selectedSenderId()) {
@@ -1253,6 +1423,87 @@ export class OrderFormComponent implements OnInit {
     setTimeout(() => this.isAutofilled.set(false), 2000);
   }
 
+  selectedAvailableCount = computed(() => {
+    return this.filteredAvailable().filter((a) => a.checked).length;
+  });
+
+  showAvailableModal = signal(false);
+
+  openAvailableModal() {
+    this.showAvailableModal.set(true);
+  }
+
+  closeAvailableModal() {
+    this.showAvailableModal.set(false);
+    this.searchAvailable.set("");
+  }
+
+  confirmAddAvailable() {
+    const selected = this.availableAttachments().filter((a) => a.checked);
+
+    if (selected.length === 0) {
+      this.closeAvailableModal();
+      return;
+    }
+
+    this.customAttachments.update((list) => [
+      ...list,
+      ...selected.map((a) => ({
+        name: a.name,
+        qty: a.qty,
+        checked: false,
+      })),
+    ]);
+
+    this.availableAttachments.update((list) => list.filter((a) => !a.checked));
+
+    this.closeAvailableModal();
+  }
+
+  allSelected = computed(() => {
+    const list = this.filteredAvailable();
+    return list.length > 0 && list.every((a) => a.checked);
+  });
+
+  toggleSelectAll() {
+    const shouldSelect = !this.allSelected();
+
+    this.availableAttachments.update((list) =>
+      list.map((a) => ({
+        ...a,
+        checked: shouldSelect,
+      })),
+    );
+  }
+
+  normalize(text: string): string {
+    return text
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
+      .replace(/\s+/g, " ");
+  }
+
+  filteredAvailable = computed(() => {
+    const keyword = this.normalize(this.searchAvailable());
+
+    return this.availableAttachments().filter((a) =>
+      this.normalize(a.name).includes(keyword),
+    );
+  });
+
+  updateAvailableQty(index: number, delta: number) {
+    this.availableAttachments.update((list) => {
+      const updated = [...list];
+
+      updated[index].qty = Math.max(1, updated[index].qty + delta);
+
+      return updated;
+    });
+  }
+
   addNewAttachment() {
     this.customAttachments.update((attachments) => [
       ...attachments,
@@ -1356,6 +1607,8 @@ export class OrderFormComponent implements OnInit {
   onSubmit() {
     if (this.form.invalid) return;
 
+    this.isSubmitting.set(true);
+
     if (!this.selectedSenderId()) {
       this.toast.show("Vui lòng chọn người giao từ danh sách!", "error");
       return;
@@ -1437,6 +1690,7 @@ export class OrderFormComponent implements OnInit {
 
           setTimeout(() => {
             this.cancel.emit();
+            this.isSubmitting.set(false);
           }, 1200);
         },
         error: (err) => {
@@ -1451,6 +1705,7 @@ export class OrderFormComponent implements OnInit {
 
           setTimeout(() => {
             this.cancel.emit();
+            this.isSubmitting.set(false);
           }, 1200);
         },
         error: (err) => {

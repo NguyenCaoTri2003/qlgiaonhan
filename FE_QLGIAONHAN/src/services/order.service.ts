@@ -46,42 +46,17 @@ export class OrderService {
     search: "",
     dept: "",
     filter: "ALL",
+    date: ""
   };
 
   refreshOrders() {
     const q = this.lastQuery;
 
-    this.loadOrders(q.page, q.limit, q.search, q.dept, q.filter).subscribe();
+    this.loadOrders(q.page, q.limit, q.search, q.dept, q.filter, q.date).subscribe();
   }
   clearOrders() {
     this._orders.set([]);
   }
-
-  // loadOrders(
-  //   page: number = 1,
-  //   limit: number = 20,
-  //   search: string = "",
-  //   dept: string = "",
-  //   filter: string = "ALL",
-  // ) {
-  //   this.loading.set(true);
-
-  //   this.http
-  //     .get<any>(
-  //       `${this.API}/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}&filter=${filter}`,
-  //     )
-  //     .subscribe({
-  //       next: (res) => {
-  //         this._orders.set(res.data);
-  //         this._totalPages.set(res.totalPages);
-  //         this.loading.set(false);
-  //       },
-  //       error: (err) => {
-  //         console.error("Load orders error:", err);
-  //         this.loading.set(false);
-  //       },
-  //     });
-  // }
 
   loadOrders(
     page: number = 1,
@@ -89,12 +64,13 @@ export class OrderService {
     search: string = "",
     dept: string = "",
     filter: string = "ALL",
+    date: string = "",
   ) {
-    this.lastQuery = { page, limit, search, dept, filter };
+    this.lastQuery = { page, limit, search, dept, filter, date };
 
     return this.http
       .get<any>(
-        `${this.API}/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}&filter=${filter}`,
+        `${this.API}/orders?page=${page}&limit=${limit}&search=${search}&dept=${dept}&filter=${filter}&date=${date}`,
       )
       .pipe(
         tap((res) => {
@@ -103,7 +79,7 @@ export class OrderService {
         }),
       );
   }
-  
+
   getOrderDetail(id: number) {
     return this.http.get<Order>(`${this.API}/orders/${id}`);
   }
@@ -129,6 +105,7 @@ export class OrderService {
     receiver_id: number,
     receiver_email: string,
     receiver_name: string,
+    attachments: number[],
   ) {
     return this.http
       .post(`${this.API}/orders/${id}/assign`, {
@@ -136,6 +113,7 @@ export class OrderService {
         receiver_id,
         receiver_email,
         receiver_name,
+        attachments,
       })
       .pipe(tap(() => this.refreshOrders()));
   }
