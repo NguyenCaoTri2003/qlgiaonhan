@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const nhigiaService = require("../services/nhigia.service");
 const { fetchNhigiaDepartments } = require("../services/nhigia.service");
+const { sendPushNotification } = require("../services/push.service");
 
 function removeVietnameseTones(str) {
   return str
@@ -987,6 +988,18 @@ exports.assignReceiver = async (req, res) => {
       message,
       orderId,
     });
+
+    // lấy device token
+    const [tokens] = await pool.query(
+      `SELECT token FROM nhigia_logistics_device_tokens WHERE user_id = ?`,
+      [receiver_id],
+    );
+
+    const deviceTokens = tokens.map((t) => t.token);
+
+    if (deviceTokens.length > 0) {
+      await sendPushNotification(deviceTokens, message, orderId);
+    }
 
     const [rows] = await pool.query(
       `SELECT COUNT(*) as total

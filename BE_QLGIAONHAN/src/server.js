@@ -54,6 +54,8 @@ app.use("/api", require("./routes/sync.routes"));
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+app.use("/api/device", require("./routes/device.routes"));
+
 const server = http.createServer(app);
 
 const io = new Server(server, {
